@@ -1,0 +1,10 @@
+/ {
+    gpio0: gpio@0 {
+        compatible = "zephyr,gpio-emul";
+        gpio-controller;
+        #gpio-cells = <2>;
+        ngpios = <32>;
+        label = "GPIO_0";
+        status = "okay";
+    };
+};

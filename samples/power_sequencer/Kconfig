@@ -1,0 +1,19 @@
+menu "Power Sequencer Configuration"
+
+source "Kconfig.zephyr"
+
+config NUM_RAILS
+    int "Number of power rails"
+    default 3
+    range 1 64
+
+config DEFAULT_ENABLE_DELAY_MS
+    int "Default enable delay per rail (ms)"
+    default 10
+
+config DEFAULT_PG_TIMEOUT_MS
+    int "Default power-good timeout per rail (ms)"
+    default 10
+
+endmenu
+
