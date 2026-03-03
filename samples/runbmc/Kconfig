@@ -1,0 +1,118 @@
+# RunBMC Firmware Framework Configuration
+# Copyright (c) 2026 RunBMC Project
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "RunBMC Firmware Framework"
+
+config RUNBMC_VERSION_STRING
+    string "Framework version"
+    default "0.2.0-dev"
+    help
+      Version string for the RunBMC firmware framework
+
+menu "BMC Core Services"
+
+config RUNBMC_POWER_MANAGEMENT
+    bool "Power Management Service"
+    default y
+    help
+      Enable BMC power management including:
+      - Power sequencing (voltage rail ordering)
+      - Power state control (S0/S5)
+      - Power monitoring and budgeting
+      - GPU power management
+
+config RUNBMC_SENSOR_FRAMEWORK
+    bool "Sensor Framework"
+    default y
+    help
+      Enable multi-sensor monitoring framework:
+      - Temperature sensors (CPU, GPU, VR, ambient)
+      - Voltage/current sensors
+      - Fan tachometer
+      - Sensor Data Records (SDR)
+
+config RUNBMC_TELEMETRY
+    bool "Telemetry Collection Engine"
+    default y
+    help
+      Enable telemetry data collection:
+      - Historical sensor data
+      - System metrics
+      - Statistical analysis (min/max/avg)
+      - Time-series storage
+
+config RUNBMC_THERMAL_MANAGEMENT
+    bool "Thermal Management"
+    default n
+    depends on RUNBMC_SENSOR_FRAMEWORK
+    help
+      Enable thermal zone management:
+      - Thermal zones (CPU, GPU, VR)
+      - Fan control (PID algorithm)
+      - Thermal trip points
+      - Throttling policies
+
+endmenu
+
+menu "Management Protocols"
+
+config RUNBMC_PLDM
+    bool "PLDM Protocol Support"
+    default n
+    help
+      Enable Platform Level Data Model (PLDM) per DMTF DSP0248.
+      Required for modern BMC interfaces.
+
+config RUNBMC_MCTP
+    bool "MCTP Transport Layer"
+    default n
+    depends on RUNBMC_PLDM
+    help
+      Enable Management Component Transport Protocol (MCTP)
+      per DMTF DSP0236. Transport for PLDM messages.
+
+config RUNBMC_FRU
+    bool "FRU Data Management"
+    default n
+    help
+      Enable Field Replaceable Unit (FRU) data management
+      per IPMI FRU specification. Stores hardware inventory.
+
+config RUNBMC_REDFISH
+    bool "Redfish API Support"
+    default n
+    help
+      Enable Redfish RESTful API (DMTF standard).
+      Requires networking support.
+
+endmenu
+
+menu "Hardware Configuration"
+
+config RUNBMC_MAX_GPUS
+    int "Maximum GPU count"
+    range 1 16
+    default 8
+    help
+      Maximum number of GPU accelerators to monitor.
+      Affects memory usage for GPU-related data structures.
+
+config RUNBMC_SENSOR_POLL_INTERVAL_MS
+    int "Sensor polling interval (ms)"
+    range 1000 60000
+    default 5000
+    help
+      How frequently to poll hardware sensors.
+      Lower = more responsive, higher CPU usage.
+
+config RUNBMC_TELEMETRY_INTERVAL_MS
+    int "Telemetry collection interval (ms)"
+    range 1000 60000
+    default 5000
+    help
+      How frequently to collect telemetry snapshots.
+
+endmenu
+
+source "Kconfig.zephyr"
