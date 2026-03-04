@@ -1,96 +1,87 @@
-/* SPDX-License-Identifier: Apache-2.0 */
-/* Copyright (c) 2026 RunBMC Project */
+/*
+ * Copyright (c) 2026 RunBMC Project
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
+#include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
-#include <runbmc/core/platform.h>
+#include <zephyr/logging/log.h>
+
+#include "runbmc/core/platform.h"
 
 LOG_MODULE_REGISTER(platform_stm32f4, LOG_LEVEL_INF);
 
-/* STM32F4 Discovery LEDs */
-#define LED0_NODE DT_ALIAS(led0) /* Green LED (PD12) */
-#define LED1_NODE DT_ALIAS(led1) /* Orange LED (PD13) */
-#define LED2_NODE DT_ALIAS(led2) /* Red LED (PD14) */
-#define LED3_NODE DT_ALIAS(led3) /* Blue LED (PD15) */
+/* STM32F4 Discovery has 4 LEDs on PD12-PD15 */
+#define LED_GREEN_NODE  DT_ALIAS(led0) /* PD12 - Green  */
+#define LED_ORANGE_NODE DT_ALIAS(led1) /* PD13 - Orange */
+#define LED_RED_NODE    DT_ALIAS(led2) /* PD14 - Red    */
+#define LED_BLUE_NODE   DT_ALIAS(led3) /* PD15 - Blue   */
 
-static const struct gpio_dt_spec led_green = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
-static const struct gpio_dt_spec led_orange = GPIO_DT_SPEC_GET(LED1_NODE, gpios);
-static const struct gpio_dt_spec led_red = GPIO_DT_SPEC_GET(LED2_NODE, gpios);
-static const struct gpio_dt_spec led_blue = GPIO_DT_SPEC_GET(LED3_NODE, gpios);
+static const struct gpio_dt_spec led_green = GPIO_DT_SPEC_GET(LED_GREEN_NODE, gpios);
+static const struct gpio_dt_spec led_orange = GPIO_DT_SPEC_GET(LED_ORANGE_NODE, gpios);
+static const struct gpio_dt_spec led_red = GPIO_DT_SPEC_GET(LED_RED_NODE, gpios);
+static const struct gpio_dt_spec led_blue = GPIO_DT_SPEC_GET(LED_BLUE_NODE, gpios);
 
-/* LED mapping for BMC status:
- * Green  = Power Good / System ON
- * Orange = Activity / Sensor reads
- * Red    = Power Warning / Error
- * Blue   = Telemetry active
+/* LED Assignment for Power Sequencing:
+ * Green  (PD12) - Main power rail
+ * Orange (PD13) - Secondary power rail
+ * Red    (PD14) - CPU power rail
+ * Blue   (PD15) - Peripheral power rail
+ *
+ * All ON = Power sequence complete, all rails good
+ * Any OFF = Problem with that specific power rail
  */
 
-static bool leds_initialized = false;
+const char *platform_get_name(void)
+{
+    return "STM32F4 Discovery";
+}
 
 int platform_init(void)
 {
-    int ret;
-
     LOG_INF("Initializing STM32F4 Discovery platform");
 
-    /* Initialize LEDs */
-    if (!gpio_is_ready_dt(&led_green)) {
-        LOG_ERR("LED0 (green) not ready");
-        return -ENODEV;
-    }
-    if (!gpio_is_ready_dt(&led_orange)) {
-        LOG_ERR("LED1 (orange) not ready");
-        return -ENODEV;
-    }
-    if (!gpio_is_ready_dt(&led_red)) {
-        LOG_ERR("LED2 (red) not ready");
-        return -ENODEV;
-    }
-    if (!gpio_is_ready_dt(&led_blue)) {
-        LOG_ERR("LED3 (blue) not ready");
+    /* Configure all LEDs */
+    if (!gpio_is_ready_dt(&led_green) || !gpio_is_ready_dt(&led_orange) ||
+        !gpio_is_ready_dt(&led_red) || !gpio_is_ready_dt(&led_blue)) {
+        LOG_ERR("LED GPIO devices not ready");
         return -ENODEV;
     }
 
-    /* Configure LED pins as outputs */
-    ret = gpio_pin_configure_dt(&led_green, GPIO_OUTPUT_INACTIVE);
-    if (ret < 0) {
-        LOG_ERR("Failed to configure green LED: %d", ret);
-        return ret;
-    }
+    gpio_pin_configure_dt(&led_green, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&led_orange, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&led_red, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&led_blue, GPIO_OUTPUT_INACTIVE);
 
-    ret = gpio_pin_configure_dt(&led_orange, GPIO_OUTPUT_INACTIVE);
-    if (ret < 0) {
-        LOG_ERR("Failed to configure orange LED: %d", ret);
-        return ret;
-    }
-
-    ret = gpio_pin_configure_dt(&led_red, GPIO_OUTPUT_INACTIVE);
-    if (ret < 0) {
-        LOG_ERR("Failed to configure red LED: %d", ret);
-        return ret;
-    }
-
-    ret = gpio_pin_configure_dt(&led_blue, GPIO_OUTPUT_INACTIVE);
-    if (ret < 0) {
-        LOG_ERR("Failed to configure blue LED: %d", ret);
-        return ret;
-    }
-
-    leds_initialized = true;
-
-    /* Power-on LED sequence */
+    /* Run LED test sequence to verify all LEDs work */
     LOG_INF("Running LED test sequence...");
+
+    /* Test each LED individually */
     gpio_pin_set_dt(&led_green, 1);
     k_msleep(200);
+    gpio_pin_set_dt(&led_green, 0);
+
     gpio_pin_set_dt(&led_orange, 1);
     k_msleep(200);
+    gpio_pin_set_dt(&led_orange, 0);
+
     gpio_pin_set_dt(&led_red, 1);
     k_msleep(200);
-    gpio_pin_set_dt(&led_blue, 1);
-    k_msleep(500);
+    gpio_pin_set_dt(&led_red, 0);
 
-    /* Turn off all LEDs */
+    gpio_pin_set_dt(&led_blue, 1);
+    k_msleep(200);
+    gpio_pin_set_dt(&led_blue, 0);
+
+    /* All LEDs on briefly */
+    gpio_pin_set_dt(&led_green, 1);
+    gpio_pin_set_dt(&led_orange, 1);
+    gpio_pin_set_dt(&led_red, 1);
+    gpio_pin_set_dt(&led_blue, 1);
+    k_msleep(300);
+
+    /* All off - will turn on during power sequence */
     gpio_pin_set_dt(&led_green, 0);
     gpio_pin_set_dt(&led_orange, 0);
     gpio_pin_set_dt(&led_red, 0);
@@ -100,70 +91,53 @@ int platform_init(void)
     return 0;
 }
 
-int32_t platform_read_sensor(uint8_t sensor_id)
+void platform_indicate_power_good(void)
 {
-    /* For STM32F4 Discovery, we could read:
-     * - Internal temperature sensor via ADC
-     * - Accelerometer via SPI (LIS3DSH)
-     * For now, return simulated values
-     */
+    /* All LEDs ON = Power sequence complete, all rails good */
+    LOG_INF("Power Good - Turning ON all LEDs (all power rails active)");
+    gpio_pin_set_dt(&led_green, 1);  /* Main power */
+    gpio_pin_set_dt(&led_orange, 1); /* Secondary power */
+    gpio_pin_set_dt(&led_red, 1);    /* CPU power */
+    gpio_pin_set_dt(&led_blue, 1);   /* Peripheral power */
+}
 
-    /* Blink orange LED on sensor read (activity indicator) */
-    if (leds_initialized) {
-        static uint32_t blink_counter = 0;
-        if ((++blink_counter % 20) == 0) { /* Blink every 20 reads */
-            gpio_pin_toggle_dt(&led_orange);
-        }
-    }
+void platform_indicate_warning(void)
+{
+    /* Flash all LEDs rapidly to indicate warning */
+    gpio_pin_toggle_dt(&led_green);
+    gpio_pin_toggle_dt(&led_orange);
+    gpio_pin_toggle_dt(&led_red);
+    gpio_pin_toggle_dt(&led_blue);
+}
 
-    /* Simulated sensor readings for now */
-    return 45000 + (k_uptime_get_32() % 15000); /* 45-60°C */
+void platform_indicate_activity(void)
+{
+    /* Toggle blue LED for activity heartbeat */
+    gpio_pin_toggle_dt(&led_blue);
 }
 
 int platform_set_power(uint8_t state)
 {
-    LOG_INF("Platform power control: %s", state ? "ON" : "OFF");
+    /* state: 0=OFF, 1=ON, other values for specific sequences */
+    LOG_DBG("Set power state to %u", state);
 
-    if (!leds_initialized) {
-        return -ENODEV;
-    }
-
-    if (state) {
-        /* Power ON - green LED on */
-        gpio_pin_set_dt(&led_green, 1);
-        gpio_pin_set_dt(&led_red, 0);
-    } else {
-        /* Power OFF - green LED off */
+    if (state == 0) {
+        /* Power OFF - turn all LEDs off */
         gpio_pin_set_dt(&led_green, 0);
+        gpio_pin_set_dt(&led_orange, 0);
+        gpio_pin_set_dt(&led_red, 0);
+        gpio_pin_set_dt(&led_blue, 0);
+    } else if (state == 1) {
+        /* Power ON - will be handled by platform_indicate_power_good() */
+        /* This simulates enabling power rails in sequence */
     }
 
     return 0;
 }
 
-const char *platform_get_name(void)
+int32_t platform_read_sensor(uint8_t sensor_id)
 {
-    return "STM32F4 Discovery";
-}
-
-/* Platform-specific functions for LED control */
-
-void platform_indicate_power_good(bool good)
-{
-    if (leds_initialized) {
-        gpio_pin_set_dt(&led_green, good ? 1 : 0);
-    }
-}
-
-void platform_indicate_warning(bool active)
-{
-    if (leds_initialized) {
-        gpio_pin_set_dt(&led_red, active ? 1 : 0);
-    }
-}
-
-void platform_indicate_activity(bool active)
-{
-    if (leds_initialized) {
-        gpio_pin_set_dt(&led_blue, active ? 1 : 0);
-    }
+    /* TODO: Read real sensors via I2C/ADC in Day 2 */
+    /* For now, return simulated temperature values */
+    return 45 + (sensor_id * 5); /* 45°C, 50°C, 55°C... */
 }
