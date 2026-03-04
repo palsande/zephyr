@@ -66,8 +66,6 @@ static void power_thread(void *arg1, void *arg2, void *arg3)
         /* Only log state changes (over limit / back to normal) */
         if (state->power_watts > POWER_WARN_THRESHOLD) {
             if (!over_limit) {
-                LOG_WRN("Power over limit: %u W (threshold: %u W)",
-                    state->power_watts, POWER_WARN_THRESHOLD);
                 over_limit = true;
                 /* Turn on warning LED */
                 if (platform_indicate_warning) {
@@ -77,7 +75,7 @@ static void power_thread(void *arg1, void *arg2, void *arg3)
             /* Silently monitor while over limit */
         } else {
             if (over_limit) {
-                LOG_INF("Power back to normal: %u W", state->power_watts);
+                // LOG_INF("Power back to normal: %u W", state->power_watts);
                 over_limit = false;
                 /* Turn on warning LED */
                 if (platform_indicate_warning) {
