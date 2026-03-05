@@ -72,6 +72,15 @@ config WIFI_SHELL_MAX_AP_STA
 	  This option defines the maximum number of APs and STAs that can be managed
 	  in Wi-Fi shell.
 
+config WIFI_P2P_MAX_PEERS
+	int "Maximum number of P2P peers that can be returned in a single query"
+	depends on WIFI_NM_WPA_SUPPLICANT_P2P
+	default 32
+	range 1 256
+	help
+	  This option defines the maximum number of P2P peers that can be returned
+	  in a single query operation.
+
 config WIFI_NM
 	bool "Wi-Fi Network manager support"
 	help
@@ -82,6 +91,7 @@ if WIFI_NM
 
 config WIFI_NM_MAX_MANAGED_INTERFACES
 	int "Maximum number of managed interfaces per Wi-Fi network manager"
+	default 2 if WIFI_USAGE_MODE_STA_AP
 	default 1
 	help
 	  This option defines the maximum number of managed interfaces per Wi-Fi
@@ -158,7 +168,7 @@ endif # WIFI_NM_WPA_SUPPLICANT_CRYPTO_ENTERPRISE
 config WIFI_MGMT_BSS_MAX_IDLE_TIME
 	int "BSS max idle timeout in seconds"
 	range 0 64000
-	default 30
+	default 300
 	help
 	  As per 802.11-2020: 11.21.13 BSS max idle period management
 	  If dot11WirelessManagementImplemented is true, dot11BSSMaxIdlePeriod is

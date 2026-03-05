@@ -44,8 +44,8 @@ LOG_MODULE_REGISTER(gpio_esp32, CONFIG_LOG_DEFAULT_LEVEL);
 #define out_w1tc out_w1tc.val
 /* arch_curr_cpu() is not available for riscv based chips */
 #define ESP32_CPU_ID()  0
-#elif defined(CONFIG_SOC_SERIES_ESP32C6)
-/* gpio structs in esp32c6 are also different */
+#elif defined(CONFIG_SOC_SERIES_ESP32C6) || defined(CONFIG_SOC_SERIES_ESP32H2)
+/* gpio structs in esp32c6/h2 are also different */
 #define out out.out_data_orig
 #define in in.in_data_next
 #define out_w1ts out_w1ts.val
@@ -504,9 +504,7 @@ static DEVICE_API(gpio, gpio_esp32_driver_api) = {
 #define ESP_SOC_GPIO_INIT(_id)							\
 	static struct gpio_esp32_data gpio_data_##_id;	\
 	static struct gpio_esp32_config gpio_config_##_id = {			\
-		.drv_cfg = {							\
-			.port_pin_mask = GPIO_PORT_PIN_MASK_FROM_DT_INST(_id),	\
-		},								\
+		.drv_cfg = GPIO_COMMON_CONFIG_FROM_DT_INST(_id),		\
 		.gpio_base = (gpio_dev_t *)DT_REG_ADDR(DT_NODELABEL(gpio0)),	\
 		.gpio_dev = (gpio_dev_t *)DT_REG_ADDR(DT_NODELABEL(gpio##_id)),	\
 		.gpio_port = _id	\
