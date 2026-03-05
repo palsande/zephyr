@@ -78,7 +78,7 @@ MEMORY
 ENTRY(__appcpu_start)
 
 /* Heap size calculations for APPCPU */
-_heap_sentry = DRAM_RESERVED_START;
+_heap_sentry = DRAM_USER_END;
 _libc_heap_size = _heap_sentry - _end;
 
 SECTIONS
@@ -156,10 +156,7 @@ SECTIONS
   } > metadata
 
   #include <zephyr/linker/rel-sections.ld>
-
-#ifdef CONFIG_LLEXT
   #include <zephyr/linker/llext-sections.ld>
-#endif
 
   /* --- START OF IRAM --- */
 

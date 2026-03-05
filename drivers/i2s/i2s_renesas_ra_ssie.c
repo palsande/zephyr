@@ -92,13 +92,12 @@ __maybe_unused static void ssi_rt_isr(void *p_args)
 {
 	const struct device *dev = (struct device *)p_args;
 	struct renesas_ra_ssie_data *dev_data = (struct renesas_ra_ssie_data *)dev->data;
-	R_SSI0_Type *p_ssi_reg = dev_data->fsp_ctrl.p_reg;
 
-	if (p_ssi_reg->SSIFSR_b.TDE && dev_data->active_dir == I2S_DIR_TX) {
+	if (dev_data->active_dir == I2S_DIR_TX) {
 		ssi_txi_isr();
 	}
 
-	if (p_ssi_reg->SSIFSR_b.RDF && dev_data->active_dir == I2S_DIR_RX) {
+	if (dev_data->active_dir == I2S_DIR_RX) {
 		ssi_rxi_isr();
 	}
 }
@@ -712,14 +711,14 @@ static int i2s_renesas_ra_ssie_configure(const struct device *dev, enum i2s_dir 
 	 * For slave mode, bit clock and frame clock is get from external
 	 */
 	switch (i2s_cfg->options & (I2S_OPT_BIT_CLK_FRAME_CLK_MASK)) {
-	case I2S_OPT_BIT_CLK_MASTER | I2S_OPT_FRAME_CLK_MASTER:
+	case I2S_OPT_BIT_CLK_CONTROLLER | I2S_OPT_FRAME_CLK_CONTROLLER:
 		new_fsp_cfg.operating_mode = I2S_MODE_MASTER;
 		ret = renesas_ra_ssie_set_clock_divider(dev, i2s_cfg, &new_fsp_extend_cfg);
 		if (ret < 0) {
 			return ret;
 		}
 		break;
-	case I2S_OPT_BIT_CLK_SLAVE | I2S_OPT_FRAME_CLK_SLAVE:
+	case I2S_OPT_BIT_CLK_TARGET | I2S_OPT_FRAME_CLK_TARGET:
 		new_fsp_cfg.operating_mode = I2S_MODE_SLAVE;
 		break;
 	default:
@@ -1155,7 +1154,7 @@ static DEVICE_API(i2s, i2s_renesas_ra_drv_api) = {
 			    .word_length = I2S_WORD_LENGTH_16_BITS,                                \
 			    .ws_continue = I2S_WS_CONTINUE_OFF,                                    \
 			    .p_callback = renesas_ra_ssie_callback,                                \
-			    .p_context = DEVICE_DT_INST_GET(index),                                \
+			    .p_context = (void *)DEVICE_DT_INST_GET(index),                        \
 			    .p_extend = &ssi_extended_cfg_t_##index,                               \
 			    .txi_irq = RA_SSIE_TX_IRQ_BY_NAME(index, irq),                         \
 			    .rxi_irq = RA_SSIE_RX_IRQ_BY_NAME(index, irq),                         \

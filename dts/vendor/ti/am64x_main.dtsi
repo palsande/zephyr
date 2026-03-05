@@ -197,17 +197,17 @@
 		status = "disabled";
 	};
 
-	main_gpio0: gpio@600000 {
+	main_gpio0: gpio@600010 {
 		compatible = "ti,davinci-gpio";
-		reg = <0x600000 0x100>;
+		reg = <0x600010 0x28>;
 		gpio-controller;
 		#gpio-cells = <2>;
 		status = "disabled";
 	};
 
-	main_gpio1: gpio@601000 {
+	main_gpio1: gpio@601010 {
 		compatible = "ti,davinci-gpio";
-		reg = <0x601000 0x100>;
+		reg = <0x601010 0x28>;
 		gpio-controller;
 		#gpio-cells = <2>;
 		status = "disabled";
@@ -223,6 +223,46 @@
 		status = "disabled";
 	};
 
+	main_mcspi1: spi@20110000 {
+		compatible = "ti,omap-mcspi";
+		reg = <0x20110000 0x400>;
+		clock-frequency = <DT_FREQ_M(50)>;
+		ti,spi-num-cs = <4>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	main_mcspi2: spi@20120000 {
+		compatible = "ti,omap-mcspi";
+		reg = <0x20120000 0x400>;
+		clock-frequency = <DT_FREQ_M(50)>;
+		ti,spi-num-cs = <4>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	main_mcspi3: spi@20130000 {
+		compatible = "ti,omap-mcspi";
+		reg = <0x20130000 0x400>;
+		clock-frequency = <DT_FREQ_M(50)>;
+		ti,spi-num-cs = <4>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	main_mcspi4: spi@20140000 {
+		compatible = "ti,omap-mcspi";
+		reg = <0x20140000 0x400>;
+		clock-frequency = <DT_FREQ_M(50)>;
+		ti,spi-num-cs = <4>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
 	main_adc0: adc@28001000 {
 		compatible = "ti,am335x-adc";
 		reg = <0x28001000 DT_SIZE_K(1)>;
@@ -230,6 +270,54 @@
 		#io-channel-cells = <1>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+	};
+
+	main_rti0: watchdog@e000000 {
+		compatible = "ti,j7-rti-wdt";
+		reg = <0xe000000 0x100>;
+		clock-frequency = <DT_FREQ_M(3)>;
+		power-domains = <&rti0_pd>;
+		status = "disabled";
+	};
+
+	main_rti1: watchdog@e010000 {
+		compatible = "ti,j7-rti-wdt";
+		reg = <0xe010000 0x100>;
+		clock-frequency = <DT_FREQ_M(3)>;
+		power-domains = <&rti1_pd>;
+		status = "disabled";
+	};
+
+	main_rti8: watchdog@e080000 {
+		compatible = "ti,j7-rti-wdt";
+		reg = <0xe080000 0x100>;
+		clock-frequency = <DT_FREQ_M(3)>;
+		power-domains = <&rti8_pd>;
+		status = "disabled";
+	};
+
+	main_rti9: watchdog@e090000 {
+		compatible = "ti,j7-rti-wdt";
+		reg = <0xe090000 0x100>;
+		clock-frequency = <DT_FREQ_M(3)>;
+		power-domains = <&rti9_pd>;
+		status = "disabled";
+	};
+
+	main_rti10: watchdog@e0a0000 {
+		compatible = "ti,j7-rti-wdt";
+		reg = <0xe0a0000 0x100>;
+		clock-frequency = <DT_FREQ_M(3)>;
+		power-domains = <&rti10_pd>;
+		status = "disabled";
+	};
+
+	main_rti11: watchdog@e0b0000 {
+		compatible = "ti,j7-rti-wdt";
+		reg = <0xe0b0000 0x100>;
+		clock-frequency = <DT_FREQ_M(3)>;
+		power-domains = <&rti11_pd>;
+		status = "disabled";
 	};
 
 	/* users: r5f0_0, r5f0_1, r5f1_0, r5f1_1 */

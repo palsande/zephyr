@@ -15,6 +15,7 @@
 
 	chosen {
 		zephyr,console = &uart0;
+		zephyr,cortex-m-idle-timer = &counter_wut1;
 		zephyr,shell-uart = &uart0;
 	};
 
@@ -80,7 +81,7 @@
 
 &i3c0 {
 	status = "okay";
-	pinctrl-0  = <&i3c_scl_p0_0 &i3c_sda_p0_1>;
+	pinctrl-0 = <&i3c_scl_p0_0 &i3c_sda_p0_1>;
 	pinctrl-names = "default";
 	i2c-scl-hz = <DT_FREQ_K(200)>;
 	i3c-scl-hz = <DT_FREQ_K(800)>;
@@ -89,6 +90,20 @@
 	adxl367: adxl367@530000000000000000 {
 		compatible = "adi,adxl367";
 		reg = <0x53 0x00 0x00>;
+		status = "okay";
+	};
+};
+
+&wut0 {
+	clock-source = <ADI_MAX32_PRPH_CLK_SRC_INRO>;
+};
+
+&wut1 {
+	status = "okay";
+	clock-source = <ADI_MAX32_PRPH_CLK_SRC_INRO>;
+	wakeup-source;
+
+	counter_wut1: counter {
 		status = "okay";
 	};
 };
