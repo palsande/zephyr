@@ -21,55 +21,7 @@ Information about the hardware and design resources can be found at
 Supported Features
 ==================
 
-The boards support the following hardware features:
-
-+-----------+------------+-------------------------------------+
-| Interface | Controller | Driver/Component                    |
-+===========+============+=====================================+
-| Arm GIC   | on-chip    | interrupt_controller                |
-+-----------+------------+-------------------------------------+
-| Arm Timer | on-chip    | timer                               |
-+-----------+------------+-------------------------------------+
-| LINFlexD  | on-chip    | serial                              |
-+-----------+------------+-------------------------------------+
-| MRU       | on-chip    | mbox                                |
-+-----------+------------+-------------------------------------+
-| NETC      | on-chip    | ethernet                            |
-|           |            |                                     |
-|           |            | mdio                                |
-+-----------+------------+-------------------------------------+
-| SIUL2     | on-chip    | pinctrl                             |
-|           |            |                                     |
-|           |            | gpio                                |
-|           |            |                                     |
-|           |            | external interrupt controller       |
-+-----------+------------+-------------------------------------+
-| SPI       | on-chip    | spi                                 |
-+-----------+------------+-------------------------------------+
-| SWT       | on-chip    | watchdog                            |
-+-----------+------------+-------------------------------------+
-| CANEXCEL  | on-chip    | can                                 |
-+-----------+------------+-------------------------------------+
-| FLEXCAN   | on-chip    | can                                 |
-+-----------+------------+-------------------------------------+
-| SAR_ADC   | on-chip    | adc                                 |
-+-----------+------------+-------------------------------------+
-| LPI2C     | on-chip    | i2c                                 |
-+-----------+------------+-------------------------------------+
-| EDMA      | on-chip    | dma                                 |
-+-----------+------------+-------------------------------------+
-| DSPI      | on-chip    | spi                                 |
-+-----------+------------+-------------------------------------+
-| eMIOS     | on-chip    | pwm                                 |
-+-----------+------------+-------------------------------------+
-| QSPI      | on-chip    | flash                               |
-+-----------+------------+-------------------------------------+
-| STM       | on-chip    | counter                             |
-+-----------+------------+-------------------------------------+
-| PIT       | on-chip    | counter                             |
-+-----------+------------+-------------------------------------+
-
-Other hardware features are not currently supported by the port.
+.. zephyr:board-supported-hw::
 
 Connections and IOs
 ===================
@@ -184,8 +136,23 @@ External Flash
 The on-board S26HS512T 512M-bit HyperFlash memory is connected to the QSPI controller
 port A1. This board configuration selects it as the default flash controller.
 
+CRYPTO
+======
+
+The Hardware Security Engine (HSE) supports cryptographic operations, including hashing and
+symmetric ciphers, with capabilities for ECB, CBC, and CTR modes using RAM-based key catalogs
+with 128-bit or 256-bit key lengths.
+
+.. note::
+   The driver assumes that the HSE Firmware has been installed and configured (i.e the key catalogs
+   has been formatted, used MU instances has been activated, etc). HSE Firmware installation and
+   configuration phase documented in HSE Firmware User Manual. Please contact NXP sales person or
+   NXP distributor in order to have access to that document.
+
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Applications for the ``s32z2xxdc2`` boards can be built in the usual way as
 documented in :ref:`build_an_application`.
@@ -339,6 +306,8 @@ line:
 
 Where ``<elf_path>`` is the path to the Zephyr application ELF in the output
 directory.
+
+.. include:: ../../common/board-footer.rst.inc
 
 References
 **********

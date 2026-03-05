@@ -6,7 +6,7 @@ Overview
 The SAM4L WM-400 Cape is a full featured design to enable IEEE 802.15.4 low
 power nodes. It is a Beaglebone Black cape concept with an Atmel AT86RF233
 radio transceiver. User can develop Touch interface and have access to many
-sensors and conectivity buses.
+sensors and connectivity buses.
 
 Hardware
 ********
@@ -29,38 +29,7 @@ Hardware
 Supported Features
 ==================
 
-The ``sam4l_wm400_cape`` board supports the following hardware features:
-
-+-----------+------------+-------------------------------------+
-| Interface | Controller | Driver/Component                    |
-+===========+============+=====================================+
-| NVIC      | on-chip    | nested vector interrupt controller  |
-+-----------+------------+-------------------------------------+
-| SYSTICK   | on-chip    | systick                             |
-+-----------+------------+-------------------------------------+
-| COUNTER   | on-chip    | counter                             |
-+-----------+------------+-------------------------------------+
-| GPIO      | on-chip    | gpio                                |
-+-----------+------------+-------------------------------------+
-| HWINFO    | on-chip    | Unique 120 bit serial number        |
-+-----------+------------+-------------------------------------+
-| RADIO     | on-chip    | ieee802154                          |
-+-----------+------------+-------------------------------------+
-| SPI       | on-chip    | spi                                 |
-+-----------+------------+-------------------------------------+
-| TRNG      | on-chip    | entropy                             |
-+-----------+------------+-------------------------------------+
-| TWIM      | on-chip    | i2c master port-interrupt           |
-+-----------+------------+-------------------------------------+
-| USART     | on-chip    | serial port                         |
-+-----------+------------+-------------------------------------+
-| USB       | on-chip    | USB device                          |
-+-----------+------------+-------------------------------------+
-
-Other hardware features are not currently supported by Zephyr.
-
-The default configuration can be found in the Kconfig
-:zephyr_file:`boards/peregrine/sam4l_wm400_cape/sam4l_wm400_cape_defconfig`.
+.. zephyr:board-supported-hw::
 
 Connections and IOs
 ===================
@@ -82,6 +51,8 @@ RS-232 onboard port or via USB device.
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 The SAM4L WM-400 Cape board has a 10-pin header to connect to a Segger JLink.
 Using the JLink is possible to program and debug the SAM4LC4B chip. The board

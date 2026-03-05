@@ -7,8 +7,8 @@
 
 .. _migration_4.1:
 
-Migration guide to Zephyr v4.1.0 (Working Draft)
-################################################
+Migration guide to Zephyr v4.1.0
+################################
 
 This document describes the changes required when migrating your application from Zephyr v4.0.0 to
 Zephyr v4.1.0.
@@ -359,7 +359,7 @@ Pin Control
 
     .. code-block:: devicetree
 
-      #include <dt-bindings/pinctrl/silabs/xg24-pinctrl.h>
+      #include <zephyr/dt-bindings/pinctrl/silabs/xg24-pinctrl.h>
 
       &pinctrl {
         i2c0_default: i2c0_default {

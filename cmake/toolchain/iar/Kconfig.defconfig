@@ -2,11 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-
-config PICOLIBC_SUPPORTED
+config TOOLCHAIN_SUPPORTS_VLA_IN_STATEMENTS
 	default n
 
-config TOOLCHAIN_HAS_BUILTIN_FFS
+config TOOLCHAIN_SUPPORTS_VARIABLE_CLEANUP_ATTRIBUTE
+	default n
+
+config PICOLIBC_SUPPORTED
 	default n
 
 config IAR_LIBC_SUPPORTED

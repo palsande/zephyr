@@ -22,15 +22,21 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 #include <sys/types.h>
 
-#include <zephyr/sys/slist.h>
-#include <zephyr/sys/util.h>
+#include <zephyr/autoconf.h>
+#include <zephyr/bluetooth/addr.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/bluetooth/att.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/iterable_sections.h>
+#include <zephyr/sys/slist.h>
+#include <zephyr/sys/util.h>
+#include <zephyr/sys/util_macro.h>
+#include <zephyr/toolchain.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -103,7 +109,7 @@ enum bt_gatt_perm {
 #define BT_GATT_ERR(_att_err) (-(_att_err))
 
 /** GATT attribute write flags */
-enum {
+enum bt_gatt_attr_write_flag {
 	/** @brief Attribute prepare write flag
 	 *
 	 * If set, write callback should only check if the device is
@@ -198,7 +204,7 @@ typedef ssize_t (*bt_gatt_attr_read_func_t)(struct bt_conn *conn,
  *  @param buf    Buffer with the data to write
  *  @param len    Number of bytes in the buffer
  *  @param offset Offset to start writing from
- *  @param flags  Flags (``BT_GATT_WRITE_FLAG_*``)
+ *  @param flags  Flags of type @ref bt_gatt_attr_write_flag
  *
  *  @return Number of bytes written, or in case of an error
  *          ``BT_GATT_ERR()`` with a specific ``BT_ATT_ERR_*`` error code.
@@ -217,12 +223,6 @@ typedef ssize_t (*bt_gatt_attr_write_func_t)(struct bt_conn *conn,
  *  While the formed GATT service is registered with the local
  *  GATT server, pointers to this type can typically be given to
  *  GATT server APIs, like bt_gatt_notify().
- *
- *  @note This type is given as an argument to the
- *  bt_gatt_discover() application callback, but it's not a
- *  proper object of this type. The field @ref perm, and methods
- *  read() and write() are not available, and it's unsound to
- *  pass the pointer to GATT server APIs.
  */
 struct bt_gatt_attr {
 	/** @brief Attribute Type
@@ -235,7 +235,8 @@ struct bt_gatt_attr {
 	 *  GATT Characteristic Presentation Format descriptor as
 	 *  specified in Core Specification 3.G.3.3.3.5.
 	 *
-	 *  You can define a new Attribute Type.
+	 *  You can define a new Attribute Type for your application specific
+	 *  use by generating a new UUID for it.
 	 */
 	const struct bt_uuid *uuid;
 
@@ -461,9 +462,11 @@ struct bt_gatt_authorization_cb {
 /**
  *  @brief Characteristic Authenticated Signed Writes property.
  *
+ *  @deprecated  This API is deprecated.
+ *
  *  If set, permits signed writes to the Characteristic Value.
  */
-#define BT_GATT_CHRC_AUTH			0x40
+#define BT_GATT_CHRC_AUTH			0x40 __DEPRECATED_MACRO
 /**
  *  @brief Characteristic Extended Properties property.
  *
@@ -621,6 +624,17 @@ static inline const char *bt_gatt_err_to_str(int gatt_err)
  */
 void bt_gatt_cb_register(struct bt_gatt_cb *cb);
 
+/** @brief Unregister GATT callbacks.
+ *
+ *  Unregister callbacks for monitoring the state of GATT. The callback
+ *  struct should be one that was previously registered.
+ *
+ *  @param cb Callback struct.
+ *
+ *  @return 0 in case of success or negative value in case of error.
+ */
+int bt_gatt_cb_unregister(struct bt_gatt_cb *cb);
+
 /** @brief Register GATT authorization callbacks.
  *
  *  Register callbacks to perform application-specific authorization of GATT
@@ -688,7 +702,7 @@ bool bt_gatt_service_is_registered(const struct bt_gatt_service *svc);
 /** @brief to be used as return values for @ref bt_gatt_attr_func_t and @ref bt_gatt_read_func_t
  *  type callbacks.
  */
-enum {
+enum bt_gatt_iter {
 	BT_GATT_ITER_STOP = 0,
 	BT_GATT_ITER_CONTINUE,
 };
@@ -711,8 +725,8 @@ typedef uint8_t (*bt_gatt_attr_func_t)(const struct bt_gatt_attr *attr,
  *
  *  Iterate attributes in the given range matching given UUID and/or data.
  *
- *  @param start_handle Start handle.
- *  @param end_handle End handle. Often set to start_handle + attr_count or
+ *  @param start_handle Start attribute handle.
+ *  @param end_handle End attribute handle. Often set to start_handle + attr_count or
  *  BT_ATT_LAST_ATTRIBUTE_HANDLE.
  *  @param uuid UUID to match, passing NULL skips UUID matching.
  *  @param attr_data Attribute data to match, passing NULL skips data matching.
@@ -730,8 +744,8 @@ void bt_gatt_foreach_attr_type(uint16_t start_handle, uint16_t end_handle,
  *
  *  Iterate attributes in the given range.
  *
- *  @param start_handle Start handle.
- *  @param end_handle End handle.
+ *  @param start_handle Starting attribute handle.
+ *  @param end_handle Ending attribute handle.
  *  @param func Callback function.
  *  @param user_data Data to pass to the callback.
  */
@@ -917,6 +931,7 @@ ssize_t bt_gatt_attr_read_service(struct bt_conn *conn,
  *  Read include service attribute value from local database storing the result
  *  into buffer after encoding it.
  *  @note Only use this with attributes which user_data is a ``bt_gatt_include``.
+ *  The function returns EINVAL if @p attr or @p attr->user_data is NULL.
  *
  *  @param conn Connection object.
  *  @param attr Attribute to read.
@@ -961,7 +976,7 @@ ssize_t bt_gatt_attr_read_chrc(struct bt_conn *conn,
 			       const struct bt_gatt_attr *attr, void *buf,
 			       uint16_t len, uint16_t offset);
 
-/** @brief Gatt Characterisitc Initialization Macro.
+/** @brief Gatt Characteristic Initialization Macro.
  *
  *  Helper macro used within the @ref BT_GATT_CHARACTERISTIC macro in the GATT attribute declaration
  *  to set the attribute user data.
@@ -1040,8 +1055,14 @@ struct bt_gatt_ccc_cfg {
 	uint16_t value;
 };
 
-/** Internal representation of CCC value */
-struct _bt_gatt_ccc {
+/** Macro to keep old name for deprecation period. */
+#define _bt_gatt_ccc bt_gatt_ccc_managed_user_data __DEPRECATED_MACRO
+
+/** @brief Internal representation of CCC value.
+ *
+ * @note Only use this as an argument for @ref BT_GATT_CCC_MANAGED
+ */
+struct bt_gatt_ccc_managed_user_data {
 	/** Configuration for each connection */
 	struct bt_gatt_ccc_cfg cfg[BT_GATT_CCC_MAX];
 
@@ -1097,8 +1118,8 @@ struct _bt_gatt_ccc {
  *          case of error.
  */
 /** @cond INTERNAL_HIDDEN
- *  @note Only use this with attributes which user_data is a _bt_gatt_ccc.
- *  _bt_gatt_ccc being the internal representation of CCC value.
+ *  @note Only use this with attributes which user_data is a bt_gatt_ccc_managed_user_data.
+ *        @ref bt_gatt_ccc_managed_user_data being the internal representation of CCC value.
  */
  /** @endcond */
 ssize_t bt_gatt_attr_read_ccc(struct bt_conn *conn,
@@ -1114,20 +1135,22 @@ ssize_t bt_gatt_attr_read_ccc(struct bt_conn *conn,
  *  @param buf Buffer to store the value read.
  *  @param len Buffer length.
  *  @param offset Start offset.
- *  @param flags Write flags.
+ *  @param flags Write flags, see @ref bt_gatt_attr_write_flag.
  *
  *  @return number of bytes written in case of success or negative values in
  *          case of error.
  */
 /** @cond INTERNAL_HIDDEN
- *  @note Only use this with attributes which user_data is a _bt_gatt_ccc.
- *  _bt_gatt_ccc being the internal representation of CCC value.
+ *  @note Only use this with attributes which user_data is a bt_gatt_ccc_managed_user_data.
+ *        @ref bt_gatt_ccc_managed_user_data being the internal representation of CCC value.
  */
- /** @endcond */
+/** @endcond */
 ssize_t bt_gatt_attr_write_ccc(struct bt_conn *conn,
 			       const struct bt_gatt_attr *attr, const void *buf,
 			       uint16_t len, uint16_t offset, uint8_t flags);
 
+/** Macro to keep old name for deprecation period. */
+#define BT_GATT_CCC_INITIALIZER BT_GATT_CCC_MANAGED_USER_DATA_INIT __DEPRECATED_MACRO
 
 /**
  *  @brief Initialize Client Characteristic Configuration Declaration Macro.
@@ -1138,12 +1161,12 @@ ssize_t bt_gatt_attr_write_ccc(struct bt_conn *conn,
  *  @param _write Configuration write callback.
  *  @param _match Configuration match callback.
  */
-#define BT_GATT_CCC_INITIALIZER(_changed, _write, _match) \
-	{                                            \
-		.cfg = {},                           \
-		.cfg_changed = _changed,             \
-		.cfg_write = _write,                 \
-		.cfg_match = _match,                 \
+#define BT_GATT_CCC_MANAGED_USER_DATA_INIT(_changed, _write, _match)                               \
+	{                                                                                          \
+		.cfg = {},                                                                         \
+		.cfg_changed = _changed,                                                           \
+		.cfg_write = _write,                                                               \
+		.cfg_match = _match,                                                               \
 	}
 
 /**
@@ -1151,7 +1174,10 @@ ssize_t bt_gatt_attr_write_ccc(struct bt_conn *conn,
  *
  *  Helper macro to declare a Managed CCC attribute.
  *
- *  @param _ccc CCC attribute user data, shall point to a _bt_gatt_ccc.
+ *  @param _ccc A new @ref bt_gatt_ccc_managed_user_data object with the same lifetime
+ *              as the results of the call to BT_GATT_CCC_MANAGED.
+ *              See the documentation of @ref bt_gatt_ccc_managed_user_data on how
+ *              to initialize it.
  *  @param _perm CCC access permissions,
  *               a bitmap of @ref bt_gatt_perm values.
  */
@@ -1169,9 +1195,25 @@ ssize_t bt_gatt_attr_write_ccc(struct bt_conn *conn,
  *  @param _perm CCC access permissions,
  *               a bitmap of @ref bt_gatt_perm values.
  */
-#define BT_GATT_CCC(_changed, _perm)				\
-	BT_GATT_CCC_MANAGED(((struct _bt_gatt_ccc[])			\
-		{BT_GATT_CCC_INITIALIZER(_changed, NULL, NULL)}), _perm)
+#define BT_GATT_CCC(_changed, _perm)                                                               \
+	BT_GATT_CCC_MANAGED(((struct bt_gatt_ccc_managed_user_data[]){                             \
+				    BT_GATT_CCC_MANAGED_USER_DATA_INIT(_changed, NULL, NULL)}),    \
+			    _perm)
+
+/**
+ *  @brief Client Characteristic Configuration Declaration Macro with write callback.
+ *
+ *  Helper macro to declare a CCC attribute with a write callback.
+ *
+ *  @param _changed Configuration changed callback.
+ *  @param _write Configuration write callback.
+ *  @param _perm CCC access permissions,
+ *               a bitmap of @ref bt_gatt_perm values.
+ */
+#define BT_GATT_CCC_WITH_WRITE_CB(_changed, _write, _perm)                                         \
+	BT_GATT_CCC_MANAGED(((struct bt_gatt_ccc_managed_user_data[]){                             \
+				    BT_GATT_CCC_MANAGED_USER_DATA_INIT(_changed, _write, NULL)}),  \
+			    _perm)
 
 /** @brief Read Characteristic Extended Properties Attribute helper
  *
@@ -1355,8 +1397,6 @@ struct bt_gatt_notify_params {
  *  The callback is run from System Workqueue context.
  *  When called from the System Workqueue context this API will not wait for
  *  resources for the callback but instead return an error.
- *  The number of pending callbacks can be increased with the
- *  @kconfig{CONFIG_BT_CONN_TX_MAX} option.
  *
  *  Alternatively it is possible to notify by UUID by setting it on the
  *  parameters, when using this method the attribute if provided is used as the
@@ -1645,26 +1685,30 @@ uint16_t bt_gatt_get_uatt_mtu(struct bt_conn *conn);
  * @{
  */
 
-/** @brief GATT Exchange MTU parameters */
+/** @brief GATT Exchange MTU parameters
+ *
+ *  Used with @ref bt_gatt_exchange_mtu function to initiate an MTU exchange. The
+ *  response is handled in the callback @p func, which is called upon
+ *  completion from the 'config BT_RECV_CONTEXT' context.
+ *
+ *  @p params must remain valid until the callback executes.
+ */
 struct bt_gatt_exchange_params {
-	/** Response callback */
+	/** Callback for MTU exchange response */
 	void (*func)(struct bt_conn *conn, uint8_t err,
 		     struct bt_gatt_exchange_params *params);
 };
 
 /** @brief Exchange MTU
  *
- *  This client procedure can be used to set the MTU to the maximum possible
- *  size the buffers can hold.
+ *  Once per connection, this client procedure can be used to set the MTU to
+ *  the maximum possible size the buffers can hold.
  *
- *  @note Shall only be used once per connection.
- *
- *  The Response comes in callback @p params->func. The callback is run from
- *  the context specified by 'config BT_RECV_CONTEXT'.
- *  @p params must remain valid until start of callback.
- *
- *  This function will block while the ATT request queue is full, except when
- *  called from the BT RX thread, as this would cause a deadlock.
+ *  As the response comes in callback @p params->func, for example
+ *  @ref bt_gatt_get_mtu can be invoked in the mtu_exchange-callback to read
+ *  out the new negotiated ATT connection MTU. The callback is run from the
+ *  context specified by 'config BT_RECV_CONTEXT' and @p params must remain
+ *  valid until start of callback.
  *
  *  @param conn Connection object.
  *  @param params Exchange MTU parameters.
@@ -1674,7 +1718,7 @@ struct bt_gatt_exchange_params {
  *
  *  @retval -ENOMEM ATT request queue is full and blocking would cause deadlock.
  *  Allow a pending request to resolve before retrying, or call this function
- *  outside the BT RX thread to get blocking behavior. Queue size is controlled
+ *  from a separate thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
  *
  *  @retval -EALREADY The MTU exchange procedure has been already performed.
@@ -1697,6 +1741,11 @@ struct bt_gatt_discover_params;
  *
  *  The attribute object as well as its UUID and value objects are temporary and
  *  must be copied to in order to cache its information.
+ *
+ *  @note @ref bt_gatt_attr is given as an argument to @ref bt_gatt_discover function, but
+ *  it's not a proper object of this type. @ref bt_gatt_attr.perm, and methods
+ *  bt_gatt_attr.read() and bt_gatt_attr.write() are not available, and it's
+ *  unsound to pass the pointer to GATT server APIs.
  *  Only the following fields of the attribute contains valid information:
  *   - uuid      UUID representing the type of attribute.
  *   - handle    Handle in the remote database.
@@ -1733,7 +1782,7 @@ typedef uint8_t (*bt_gatt_discover_func_t)(struct bt_conn *conn,
 					struct bt_gatt_discover_params *params);
 
 /** GATT Discover types */
-enum {
+enum bt_gatt_discover_type {
 	/** Discover Primary Services. */
 	BT_GATT_DISCOVER_PRIMARY,
 	/** Discover Secondary Services. */
@@ -1790,15 +1839,20 @@ struct bt_gatt_discover_params {
 		struct {
 			/** Include service attribute declaration handle */
 			uint16_t attr_handle;
-			/** Included service start handle */
+			/** Starting attribute handle for included service */
 			uint16_t start_handle;
-			/** Included service end handle */
+			/** Ending attribute handle for included service */
 			uint16_t end_handle;
 		} _included;
-		/** Discover start handle */
+		/** Starting attribute handle to begin discovery */
 		uint16_t start_handle;
 	};
-	/** Discover end handle */
+	/** @brief Ending attribute handle to stop discovery at
+	 *
+	 * @note When discovery begins this can be set to
+	 * @ref BT_ATT_LAST_ATTRIBUTE_HANDLE to discover all attributes
+	 * in the service.
+	 */
 	uint16_t end_handle;
 	/** Discover type */
 	uint8_t type;
@@ -1834,9 +1888,6 @@ struct bt_gatt_discover_params {
  *  the BT RX thread. @p params must remain valid until start of callback where
  *  iter `attr` is `NULL` or callback will return `BT_GATT_ITER_STOP`.
  *
- *  This function will block while the ATT request queue is full, except when
- *  called from the BT RX thread, as this would cause a deadlock.
- *
  *  @param conn Connection object.
  *  @param params Discover parameters.
  *
@@ -1845,7 +1896,7 @@ struct bt_gatt_discover_params {
  *
  *  @retval -ENOMEM ATT request queue is full and blocking would cause deadlock.
  *  Allow a pending request to resolve before retrying, or call this function
- *  outside the BT RX thread to get blocking behavior. Queue size is controlled
+ *  from a separate thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
  */
 int bt_gatt_discover(struct bt_conn *conn,
@@ -1858,6 +1909,9 @@ struct bt_gatt_read_params;
  *
  *  When reading using by_uuid, `params->start_handle` is the attribute handle
  *  for this `data` item.
+ *
+ *  If the received data length is invalid, the callback will called with the
+ *  error @ref BT_ATT_ERR_INVALID_PDU.
  *
  *  @param conn Connection object.
  *  @param err ATT error code.
@@ -1906,9 +1960,27 @@ struct bt_gatt_read_params {
 			bool variable;
 		} multiple;
 		struct {
-			/** Attribute handle to start reading from. */
+			/** @brief Requested start attribute handle number.
+			 *
+			 * @details The starting handle is set to the starting point of the range
+			 * over which this read should be performed. For example, this could be
+			 * set to @ref BT_ATT_FIRST_ATTRIBUTE_HANDLE to set the starting point of
+			 * the range at the beginning of the GATT database, or to the starting
+			 * handle of a service after discovery.
+			 *
+			 * This value is automatically incremented by the stack after
+			 * processing each matching handle-value pair returned by the server.
+			 */
 			uint16_t start_handle;
-			/** Attribute handle to stop reading at. */
+			/** @brief Requested end attribute handle number.
+			 *
+			 * @details The end handle is set to the ending point of the range over
+			 * which this read should be performed. For example, this could be set to
+			 * @ref BT_ATT_LAST_ATTRIBUTE_HANDLE to set the ending point of the range
+			 * at the end of the GATT database, or to the end handle for service after
+			 * discovery, where the end_handle is available in the
+			 * @ref bt_gatt_service_val.
+			 */
 			uint16_t end_handle;
 			/** 2 or 16 octet UUID. */
 			const struct bt_uuid *uuid;
@@ -1924,11 +1996,11 @@ struct bt_gatt_read_params {
 
 /** @brief Read Attribute Value by handle
  *
- *  This procedure read the attribute value and return it to the callback.
+ *  This procedure reads the attribute value and returns it to the callback.
  *
  *  When reading attributes by UUID the callback can be called multiple times
- *  depending on how many instances of given the UUID exists with the
- *  start_handle being updated for each instance.
+ *  depending on how many instances of a given UUID exists with the start_handle
+ *  being updated for each instance.
  *
  *  To perform a GATT Long Read procedure, start with a Characteristic Value
  *  Read (by setting @c offset @c 0 and @c handle_count @c 1) and then return
@@ -1949,9 +2021,8 @@ struct bt_gatt_read_params {
  *  The Response comes in callback @p params->func. The callback is run from
  *  the context specified by 'config BT_RECV_CONTEXT'.
  *  @p params must remain valid until start of callback.
- *
- *  This function will block while the ATT request queue is full, except when
- *  called from the BT RX thread, as this would cause a deadlock.
+ *  If the received data length is invalid, the callback @p params->func will
+ *  called with the error @ref BT_ATT_ERR_INVALID_PDU.
  *
  *  @param conn Connection object.
  *  @param params Read parameters.
@@ -1961,7 +2032,7 @@ struct bt_gatt_read_params {
  *
  *  @retval -ENOMEM ATT request queue is full and blocking would cause deadlock.
  *  Allow a pending request to resolve before retrying, or call this function
- *  outside the BT RX thread to get blocking behavior. Queue size is controlled
+ *  from a separate thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
  */
 int bt_gatt_read(struct bt_conn *conn, struct bt_gatt_read_params *params);
@@ -2002,11 +2073,6 @@ struct bt_gatt_write_params {
  *  the context specified by 'config BT_RECV_CONTEXT'.
  *  @p params must remain valid until start of callback.
  *
- *  This function will block while the ATT request queue is full, except when
- *  called from Bluetooth event context. When called from Bluetooth context,
- *  this function will instead instead return `-ENOMEM` if it would block to
- *  avoid a deadlock.
- *
  *  @param conn Connection object.
  *  @param params Write parameters.
  *
@@ -2015,8 +2081,8 @@ struct bt_gatt_write_params {
  *
  *  @retval -ENOMEM ATT request queue is full and blocking would cause deadlock.
  *  Allow a pending request to resolve before retrying, or call this function
- *  outside Bluetooth event context to get blocking behavior. Queue size is
- *  controlled by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
+ *  from a separate thread to get blocking behavior. Queue size is controlled
+ *  by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
  */
 int bt_gatt_write(struct bt_conn *conn, struct bt_gatt_write_params *params);
 
@@ -2029,17 +2095,12 @@ int bt_gatt_write(struct bt_conn *conn, struct bt_gatt_write_params *params);
  *  The callback is run from System Workqueue context.
  *  When called from the System Workqueue context this API will not wait for
  *  resources for the callback but instead return an error.
- *  The number of pending callbacks can be increased with the
- *  @kconfig{CONFIG_BT_CONN_TX_MAX} option.
- *
- *  This function will block while the ATT request queue is full, except when
- *  called from the BT RX thread, as this would cause a deadlock.
  *
  *  @param conn Connection object.
  *  @param handle Attribute handle.
  *  @param data Data to be written.
  *  @param length Data length.
- *  @param sign Whether to sign data
+ *  @param sign Whether to sign data.
  *  @param func Transmission complete callback.
  *  @param user_data User data to be passed back to callback.
  *
@@ -2047,7 +2108,7 @@ int bt_gatt_write(struct bt_conn *conn, struct bt_gatt_write_params *params);
  *
  *  @retval -ENOMEM ATT request queue is full and blocking would cause deadlock.
  *  Allow a pending request to resolve before retrying, or call this function
- *  outside the BT RX thread to get blocking behavior. Queue size is controlled
+ *  from a separate thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
  */
 int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
@@ -2060,20 +2121,17 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
  *  This procedure write the attribute value without requiring an
  *  acknowledgment that the write was successfully performed
  *
- *  This function will block while the ATT request queue is full, except when
- *  called from the BT RX thread, as this would cause a deadlock.
- *
  *  @param conn Connection object.
  *  @param handle Attribute handle.
  *  @param data Data to be written.
  *  @param length Data length.
- *  @param sign Whether to sign data
+ *  @param sign Whether to sign data.
  *
  *  @retval 0 Successfully queued request.
  *
  *  @retval -ENOMEM ATT request queue is full and blocking would cause deadlock.
  *  Allow a pending request to resolve before retrying, or call this function
- *  outside the BT RX thread to get blocking behavior. Queue size is controlled
+ *  from a separate thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
  */
 static inline int bt_gatt_write_without_response(struct bt_conn *conn,
@@ -2117,7 +2175,7 @@ typedef void (*bt_gatt_subscribe_func_t)(struct bt_conn *conn, uint8_t err,
 					 struct bt_gatt_subscribe_params *params);
 
 /** Subscription flags */
-enum {
+enum bt_gatt_sub_flag {
 	/** @brief Persistence flag
 	 *
 	 *  If set, indicates that the subscription is not saved
@@ -2195,7 +2253,7 @@ struct bt_gatt_subscribe_params {
 	 */
 	bt_security_t min_security;
 #endif
-	/** Subscription flags */
+	/** Subscription flags, see @ref bt_gatt_sub_flag */
 	ATOMIC_DEFINE(flags, BT_GATT_SUBSCRIBE_NUM_FLAGS);
 
 	/** @cond INTERNAL_HIDDEN
@@ -2227,9 +2285,6 @@ struct bt_gatt_subscribe_params {
  *        valid while subscribed and cannot be reused for additional subscriptions
  *        whilst active.
  *
- *  This function will block while the ATT request queue is full, except when
- *  called from the BT RX thread, as this would cause a deadlock.
- *
  *  @param conn Connection object.
  *  @param params Subscribe parameters.
  *
@@ -2238,7 +2293,7 @@ struct bt_gatt_subscribe_params {
  *
  *  @retval -ENOMEM ATT request queue is full and blocking would cause deadlock.
  *  Allow a pending request to resolve before retrying, or call this function
- *  outside the BT RX thread to get blocking behavior. Queue size is controlled
+ *  from a separate thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
  *
  *  @retval -EALREADY if there already exist a subscription using the @p params.
@@ -2278,9 +2333,6 @@ int bt_gatt_resubscribe(uint8_t id, const bt_addr_le_t *peer,
  *  The Response comes in callback @p params->func. The callback is run from
  *  the BT RX thread.
  *
- *  This function will block while the ATT request queue is full, except when
- *  called from the BT RX thread, as this would cause a deadlock.
- *
  *  @param conn Connection object.
  *  @param params Subscribe parameters. The parameters shall be a @ref bt_gatt_subscribe_params from
  *                a previous call to bt_gatt_subscribe().
@@ -2290,7 +2342,7 @@ int bt_gatt_resubscribe(uint8_t id, const bt_addr_le_t *peer,
  *
  *  @retval -ENOMEM ATT request queue is full and blocking would cause deadlock.
  *  Allow a pending request to resolve before retrying, or call this function
- *  outside the BT RX thread to get blocking behavior. Queue size is controlled
+ *  from a separate thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_ATT_TX_COUNT}.
  */
 int bt_gatt_unsubscribe(struct bt_conn *conn,

@@ -26,8 +26,8 @@
 
 .. _zephyr_4.1:
 
-Zephyr 4.1.0 (Working Draft)
-############################
+Zephyr 4.1.0
+############
 
 We are pleased to announce the release of Zephyr version 4.1.0.
 Major enhancements with this release include:
@@ -70,10 +70,8 @@ The following sections provide detailed lists of changes by component.
 
 Security Vulnerability Related
 ******************************
-The following CVEs are addressed by this release:
 
-More detailed information can be found in:
-https://docs.zephyrproject.org/latest/security/vulnerabilities.html
+The following CVEs are addressed by this release:
 
 * :cve:`2025-1673` `Zephyr project bug tracker GHSA-jjhx-rrh4-j8mx
   <https://github.com/zephyrproject-rtos/zephyr/security/advisories/GHSA-jjhx-rrh4-j8mx>`_
@@ -83,6 +81,9 @@ https://docs.zephyrproject.org/latest/security/vulnerabilities.html
 
 * :cve:`2025-1675` `Zephyr project bug tracker GHSA-2m84-5hfw-m8v4
   <https://github.com/zephyrproject-rtos/zephyr/security/advisories/GHSA-2m84-5hfw-m8v4>`_
+
+More detailed information can be found in:
+https://docs.zephyrproject.org/latest/security/vulnerabilities.html
 
 API Changes
 ***********
@@ -287,6 +288,13 @@ New APIs and options
 
     * :kconfig:option:`CONFIG_MDNS_RESPONDER_PROBE`
 
+  * Ethernet
+
+    * Allow user to specify protocol extensions when receiving data from Ethernet network.
+      This makes it possible to register a handler for Ethernet protocol type without changing
+      core Zephyr network code. :c:macro:`NET_L3_REGISTER`
+    * :kconfig:option:`CONFIG_NET_L2_ETHERNET_RESERVE_HEADER`
+
   * HTTP
 
     * Extended :c:macro:`HTTP_SERVICE_DEFINE` to allow to specify a default
@@ -429,7 +437,7 @@ New Boards
 
 * Nordic Semiconductor
 
-   * :zephyr:board:`nrf54l09pdk` (``nrf54l09pdk``)
+   * nRF54L09 PDK (``nrf54l09pdk``)
 
 * Norik Systems
 
@@ -438,7 +446,7 @@ New Boards
 
 * Panasonic Corporation
 
-   * :zephyr:board:`panb511evb` (``panb511evb``)
+   * PAN B511 Evaluation Board (``panb511evb``)
 
 * Peregrine Consultoria e Servicos
 
@@ -934,7 +942,7 @@ New Samples
 * :zephyr:code-sample:`bluetooth_ccp_call_control_client`
 * :zephyr:code-sample:`bluetooth_ccp_call_control_server`
 * :zephyr:code-sample:`coresight_stm_sample`
-* :zephyr:code-sample:`dfu-next`
+* :zephyr:code-sample:`usb-dfu`
 * :zephyr:code-sample:`i2c-rtio-loopback`
 * :zephyr:code-sample:`lvgl-screen-transparency`
 * :zephyr:code-sample:`mctp_endpoint_sample`
@@ -944,13 +952,13 @@ New Samples
 * :zephyr:code-sample:`rtc`
 * :zephyr:code-sample:`sensor_batch_processing`
 * :zephyr:code-sample:`sensor_clock`
-* :zephyr:code-sample:`stream_fifo`
+* Generic device FIFO streaming (``stream_fifo``)
 * :zephyr:code-sample:`tdk_apex`
 * :zephyr:code-sample:`tmc50xx`
 * :zephyr:code-sample:`uart`
 * :zephyr:code-sample:`usb-midi2-device`
-* :zephyr:code-sample:`usbd-cdc-acm-console`
-* :zephyr:code-sample:`webusb-next`
+* :zephyr:code-sample:`usb-cdc-acm-console`
+* :zephyr:code-sample:`webusb`
 
 Other notable changes
 *********************
@@ -978,3 +986,14 @@ Other notable changes
   by excluding the test scenario name prefix which is the same as the parent test suite id.
 
 * Added support for HTTP PUT/PATCH/DELETE methods for HTTP server dynamic resources.
+
+* Driver API structures are now available through iterable sections and a new
+  :c:macro:`DEVICE_API_IS` macro has been introduced to allow to check if a device supports a
+  given API. Many shell commands now use this to provide "smarter" auto-completion and only list
+  compatible devices when they expect a device argument.
+
+* Zephyr's :ref:`interactive board catalog <boards>` has been extended to allow searching for boards
+  based on supported hardware features. A new :rst:dir:`zephyr:board-supported-hw` Sphinx directive
+  can now be used in boards' documentation pages to automatically include a list of the hardware
+  features supported by a board, and many boards have already adopted this new feature in their
+  documentation.

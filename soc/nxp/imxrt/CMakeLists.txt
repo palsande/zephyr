@@ -4,6 +4,7 @@
 add_subdirectory(${SOC_SERIES})
 
 zephyr_include_directories(.)
+zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../common)
 zephyr_include_directories(${SOC_SERIES})
 
 zephyr_linker_sources_ifdef(CONFIG_NXP_IMXRT_BOOT_HEADER
@@ -66,7 +67,7 @@ if(CONFIG_SOC_SERIES_IMXRT118X)
   zephyr_compile_definitions(XIP_EXTERNAL_FLASH)
 endif()
 
-if(CONFIG_SOC_SERIES_IMXRT6XX OR CONFIG_SOC_SERIES_IMXRT5XX OR CONFIG_SOC_SERIES_IMXRT7XX)
+if(CONFIG_SOC_SERIES_IMXRT6XX OR CONFIG_SOC_SERIES_IMXRT5XX)
   zephyr_linker_sources_ifdef(CONFIG_USB_DEVICE_DRIVER SECTIONS usb.ld)
   zephyr_linker_sources_ifdef(CONFIG_UDC_DRIVER SECTIONS usb.ld)
 endif()

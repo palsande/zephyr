@@ -5,14 +5,23 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "btp/btp.h"
-#include "zephyr/sys/byteorder.h"
+#include <errno.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
-#include <../../subsys/bluetooth/audio/tbs_internal.h>
-
+#include <zephyr/autoconf.h>
+#include <zephyr/bluetooth/addr.h>
 #include <zephyr/bluetooth/audio/tbs.h>
+#include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/conn.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/net_buf.h>
+#include <zephyr/sys/byteorder.h>
+#include <zephyr/sys/util.h>
+
+#include "../../subsys/bluetooth/audio/tbs_internal.h"
+#include "btp/btp.h"
 
 #define LOG_MODULE_NAME bttester_ccp
 LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_BTTESTER_LOG_LEVEL);
@@ -22,44 +31,15 @@ struct bt_tbs_instance *tbs_inst;
 static uint8_t call_index;
 static uint8_t inst_ccid;
 static bool send_ev;
+static uint8_t tbs_register_bearer(const void *cmd, uint16_t cmd_len, void *rsp, uint16_t *rsp_len);
 
 static uint8_t ccp_supported_commands(const void *cmd, uint16_t cmd_len,
 				      void *rsp, uint16_t *rsp_len)
 {
 	struct btp_ccp_read_supported_commands_rp *rp = rsp;
 
-	/* octet 0 */
-	tester_set_bit(rp->data, BTP_CCP_READ_SUPPORTED_COMMANDS);
-	tester_set_bit(rp->data, BTP_CCP_DISCOVER_TBS);
-	tester_set_bit(rp->data, BTP_CCP_ACCEPT_CALL);
-	tester_set_bit(rp->data, BTP_CCP_TERMINATE_CALL);
-	tester_set_bit(rp->data, BTP_CCP_ORIGINATE_CALL);
-	tester_set_bit(rp->data, BTP_CCP_READ_CALL_STATE);
-	tester_set_bit(rp->data, BTP_CCP_READ_BEARER_NAME);
-
-	/* octet 1 */
-	tester_set_bit(rp->data, BTP_CCP_READ_BEARER_UCI);
-	tester_set_bit(rp->data, BTP_CCP_READ_BEARER_TECH);
-	tester_set_bit(rp->data, BTP_CCP_READ_URI_LIST);
-	tester_set_bit(rp->data, BTP_CCP_READ_SIGNAL_STRENGTH);
-	tester_set_bit(rp->data, BTP_CCP_READ_SIGNAL_INTERVAL);
-	tester_set_bit(rp->data, BTP_CCP_READ_CURRENT_CALLS);
-	tester_set_bit(rp->data, BTP_CCP_READ_CCID);
-
-	/* octet 2 */
-	tester_set_bit(rp->data, BTP_CCP_READ_CALL_URI);
-	tester_set_bit(rp->data, BTP_CCP_READ_STATUS_FLAGS);
-	tester_set_bit(rp->data, BTP_CCP_READ_OPTIONAL_OPCODES);
-	tester_set_bit(rp->data, BTP_CCP_READ_FRIENDLY_NAME);
-	tester_set_bit(rp->data, BTP_CCP_READ_REMOTE_URI);
-	tester_set_bit(rp->data, BTP_CCP_SET_SIGNAL_INTERVAL);
-	tester_set_bit(rp->data, BTP_CCP_HOLD_CALL);
-
-	/* octet 3 */
-	tester_set_bit(rp->data, BTP_CCP_RETRIEVE_CALL);
-	tester_set_bit(rp->data, BTP_CCP_JOIN_CALLS);
-
-	*rsp_len = sizeof(*rp) + 1;
+	*rsp_len = tester_supported_commands(BTP_SERVICE_ID_CCP, rp->data);
+	*rsp_len += sizeof(*rp);
 
 	return BTP_STATUS_SUCCESS;
 }
@@ -886,21 +866,8 @@ static uint8_t tbs_supported_commands(const void *cmd, uint16_t cmd_len, void *r
 {
 	struct btp_tbs_read_supported_commands_rp *rp = rsp;
 
-	/* octet 0 */
-	tester_set_bit(rp->data, BTP_TBS_READ_SUPPORTED_COMMANDS);
-	tester_set_bit(rp->data, BTP_TBS_REMOTE_INCOMING);
-	tester_set_bit(rp->data, BTP_TBS_HOLD);
-	tester_set_bit(rp->data, BTP_TBS_SET_BEARER_NAME);
-	tester_set_bit(rp->data, BTP_TBS_SET_TECHNOLOGY);
-	tester_set_bit(rp->data, BTP_TBS_SET_URI_SCHEME);
-	tester_set_bit(rp->data, BTP_TBS_SET_STATUS_FLAGS);
-
-	/* octet 1 */
-	tester_set_bit(rp->data, BTP_TBS_REMOTE_HOLD);
-	tester_set_bit(rp->data, BTP_TBS_ORIGINATE);
-	tester_set_bit(rp->data, BTP_TBS_SET_SIGNAL_STRENGTH);
-
-	*rsp_len = sizeof(*rp) + 2;
+	*rsp_len = tester_supported_commands(BTP_SERVICE_ID_TBS, rp->data);
+	*rsp_len += sizeof(*rp);
 
 	return BTP_STATUS_SUCCESS;
 }
@@ -952,7 +919,8 @@ static uint8_t tbs_originate(const void *cmd, uint16_t cmd_len, void *rsp, uint1
 	uri[cp->uri_len] = '\0';
 
 	err = bt_tbs_originate(cp->index, uri, &call_index);
-	if (err) {
+	/* TODO should we extend BTP to return call ID? */
+	if (err < 0) {
 		return BTP_STATUS_FAILED;
 	}
 
@@ -1033,7 +1001,6 @@ static uint8_t tbs_set_uri_scheme_list(const void *cmd, uint16_t cmd_len, void *
 {
 	const struct btp_tbs_set_uri_schemes_list_cmd *cp = cmd;
 	char uri_list[CONFIG_BT_TBS_MAX_SCHEME_LIST_LENGTH];
-	char *uri_ptr = (char *)&uri_list;
 	int err;
 
 	LOG_DBG("TBS Set Uri Scheme list");
@@ -1050,7 +1017,7 @@ static uint8_t tbs_set_uri_scheme_list(const void *cmd, uint16_t cmd_len, void *
 		return BTP_STATUS_FAILED;
 	}
 
-	err = bt_tbs_set_uri_scheme_list(cp->index, (const char **)&uri_ptr, cp->uri_count);
+	err = bt_tbs_set_uri_scheme_list(cp->index, uri_list);
 	if (err) {
 		return BTP_STATUS_FAILED;
 	}
@@ -1091,6 +1058,22 @@ static uint8_t tbs_set_signal_strength(const void *cmd, uint16_t cmd_len, void *
 	return BTP_STATUS_SUCCESS;
 }
 
+static uint8_t tbs_terminate_call(const void *cmd, uint16_t cmd_len, void *rsp,
+				  uint16_t *rsp_len)
+{
+	const struct btp_tbs_terminate_call_cmd *cp = cmd;
+	int err;
+
+	LOG_DBG("index=%u", cp->index);
+
+	err = bt_tbs_terminate(cp->index);
+	if (err != 0) {
+		return BTP_STATUS_FAILED;
+	}
+
+	return BTP_STATUS_SUCCESS;
+}
+
 static bool btp_tbs_originate_call_cb(struct bt_conn *conn, uint8_t call_index, const char *uri)
 {
 	LOG_DBG("TBS Originate Call cb");
@@ -1109,6 +1092,11 @@ static struct bt_tbs_cb tbs_cbs = {
 };
 
 static const struct btp_handler tbs_handlers[] = {
+	{
+		.opcode = BTP_TBS_REGISTER_BEARER,
+		.expect_len = BTP_HANDLER_LENGTH_VARIABLE,
+		.func = tbs_register_bearer,
+	},
 	{
 		.opcode = BTP_TBS_READ_SUPPORTED_COMMANDS,
 		.index = BTP_INDEX_NONE,
@@ -1160,54 +1148,98 @@ static const struct btp_handler tbs_handlers[] = {
 		.expect_len = sizeof(struct btp_tbs_set_signal_strength_cmd),
 		.func = tbs_set_signal_strength,
 	},
+	{
+		.opcode = BTP_TBS_TERMINATE_CALL,
+		.expect_len = sizeof(struct btp_tbs_terminate_call_cmd),
+		.func = tbs_terminate_call
+	},
 };
 
 uint8_t tester_init_tbs(void)
 {
-	const struct bt_tbs_register_param gtbs_param = {
-		.provider_name = "Generic TBS",
-		.uci = "un000",
-		.uri_schemes_supported = "tel,skype",
-		.gtbs = true,
-		.authorization_required = false,
-		.technology = BT_TBS_TECHNOLOGY_3G,
-		.supported_features = CONFIG_BT_TBS_SUPPORTED_FEATURES,
-	};
-	const struct bt_tbs_register_param tbs_param = {
-		.provider_name = "TBS",
-		.uci = "un000",
-		.uri_schemes_supported = "tel,skype",
-		.gtbs = false,
-		.authorization_required = false,
-		/* Set different technologies per bearer */
-		.technology = BT_TBS_TECHNOLOGY_4G,
-		.supported_features = CONFIG_BT_TBS_SUPPORTED_FEATURES,
-	};
-	int err;
-
 	bt_tbs_register_cb(&tbs_cbs);
 
 	tester_register_command_handlers(BTP_SERVICE_ID_TBS, tbs_handlers,
 					 ARRAY_SIZE(tbs_handlers));
-
-	err = bt_tbs_register_bearer(&gtbs_param);
-	if (err < 0) {
-		LOG_DBG("Failed to register GTBS: %d", err);
-
-		return BTP_STATUS_FAILED;
-	}
-
-	err = bt_tbs_register_bearer(&tbs_param);
-	if (err < 0) {
-		LOG_DBG("Failed to register TBS: %d", err);
-
-		return BTP_STATUS_FAILED;
-	}
 
 	return BTP_STATUS_SUCCESS;
 }
 
 uint8_t tester_unregister_tbs(void)
 {
+	return BTP_STATUS_SUCCESS;
+}
+
+static uint8_t tbs_register_bearer(const void *cmd, uint16_t cmd_len, void *rsp, uint16_t *rsp_len)
+{
+	const struct btp_tbs_register_bearer_cmd *cp = cmd;
+	const uint8_t *strings = cp->strings;
+	struct btp_tbs_register_bearer_rp *rp = rsp;
+	char provider_name[CONFIG_BT_TBS_MAX_PROVIDER_NAME_LENGTH + 1];
+	char uci[BT_TBS_MAX_UCI_SIZE];
+	char uri_scheme_list[CONFIG_BT_TBS_MAX_URI_LENGTH + 1];
+
+	if (cmd_len < sizeof(*cp)) {
+		LOG_DBG("Packet too short: %u", cmd_len);
+		return BTP_STATUS_FAILED;
+	}
+
+	if (cmd_len != sizeof(*cp) + cp->provider_name_len +
+	    cp->uci_len + cp->uri_scheme_list_len) {
+		LOG_DBG("Invalid length: %u", cmd_len);
+		return BTP_STATUS_FAILED;
+	}
+
+	if (cp->provider_name_len >= sizeof(provider_name)) {
+		LOG_DBG("Buffer overflow risk: provider_name_len=%u (max=%d)",
+			cp->provider_name_len, CONFIG_BT_TBS_MAX_PROVIDER_NAME_LENGTH);
+		return BTP_STATUS_FAILED;
+	}
+
+	if (cp->uci_len >= sizeof(uci)) {
+		LOG_DBG("Buffer overflow risk: uci_len=%u (max=%u)",
+			cp->uci_len, BT_TBS_MAX_UCI_SIZE - 1U);
+		return BTP_STATUS_FAILED;
+	}
+
+	if (cp->uri_scheme_list_len >= sizeof(uri_scheme_list)) {
+		LOG_DBG("Buffer overflow risk: uri_scheme_list_len=%u (max=%d)",
+			cp->uri_scheme_list_len, CONFIG_BT_TBS_MAX_URI_LENGTH);
+		return BTP_STATUS_FAILED;
+	}
+
+	/* Extract provider_name */
+	(void)memcpy(provider_name, strings, cp->provider_name_len);
+	provider_name[cp->provider_name_len] = '\0';
+
+	/* Extract uci */
+	(void)memcpy(uci, strings + cp->provider_name_len, cp->uci_len);
+	uci[cp->uci_len] = '\0';
+
+	/* Extract uri_scheme_list */
+	(void)memcpy(uri_scheme_list,
+		     strings + cp->provider_name_len + cp->uci_len,
+		     cp->uri_scheme_list_len);
+	uri_scheme_list[cp->uri_scheme_list_len] = '\0';
+
+	struct bt_tbs_register_param param = {
+		.provider_name = provider_name,
+		.uci = uci,
+		.uri_schemes_supported = uri_scheme_list,
+		.gtbs = cp->gtbs == 1U ? true : false,
+		.technology = cp->technology,
+		.supported_features  = sys_le16_to_cpu(cp->optional_opcodes),
+	};
+
+	int index = bt_tbs_register_bearer(&param);
+
+	if (index < 0) {
+		return BTP_STATUS_FAILED;
+	}
+
+	/* Return the assigned index in the response */
+	rp->index = (uint8_t)index;
+	*rsp_len = sizeof(*rp);
+
 	return BTP_STATUS_SUCCESS;
 }

@@ -75,51 +75,39 @@ Detailed hardware features for the EK-RA6M5 MCU can be found at `EK-RA6M5 - User
 Supported Features
 ==================
 
-The below features are currently supported on Zephyr for EK-RA6M5 board:
-
-+-----------+------------+----------------------+
-| Interface | Controller | Driver/Component     |
-+===========+============+======================+
-| GPIO      | on-chip    | gpio                 |
-+-----------+------------+----------------------+
-| MPU       | on-chip    | arch/arm             |
-+-----------+------------+----------------------+
-| NVIC      | on-chip    | arch/arm             |
-+-----------+------------+----------------------+
-| UART      | on-chip    | serial               |
-+-----------+------------+----------------------+
-| CLOCK     | on-chip    | clock control        |
-+-----------+------------+----------------------+
-| I2C       | on-chip    | i2c                  |
-+-----------+------------+----------------------+
-| SPI       | on-chip    | spi                  |
-+-----------+------------+----------------------+
-| COUNTER   | on-chip    | counter              |
-+-----------+------------+----------------------+
-| USBHS     | on-chip    | udc                  |
-+-----------+------------+----------------------+
-| ADC       | on-chip    | adc                  |
-+-----------+------------+----------------------+
-| PWM       | on-chip    | pwm                  |
-+-----------+------------+----------------------+
-| FLASH     | on-chip    | flash                |
-+-----------+------------+----------------------+
-| ENTROPY   | on-chip    | entropy              |
-+-----------+------------+----------------------+
-| DAC       | on-chip    | dac                  |
-+-----------+------------+----------------------+
-| USBFS     | on-chip    | udc                  |
-+-----------+------------+----------------------+
-
-Other hardware features are currently not supported by the port.
+.. zephyr:board-supported-hw::
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Applications for the ``ek_ra6m5`` board target configuration can be
 built, flashed, and debugged in the usual way. See
 :ref:`build_an_application` and :ref:`application_run` for more details on
 building and running.
+
+.. note::
+
+   In applications using ethernet, ethernet buffers must be placed in non-secure RAM.
+   This requires configuration of the Implementation Defined Attribution Unit (IDAU),
+   which must be applied by partition memory using Renesas Flash Programmer.
+
+Partition Memory
+================
+
+Renesas Flash Programmer is available at (`Renesas Flash Programmer Download`_).
+Once downloaded and installed, check rfp-cli is available or set rfp-cli path manually.
+
+Renesas partition data file will be available at build/zephyr/zephyr.rpd.
+Connect jumper J6 then run Renesas Flash Programmer.
+
+To partition memory manually, execute:
+
+   .. code-block:: console
+
+      # From the root of the zephyr repository
+      rfp-cli -device ra -tool jlink -fo boundary-file build/zephyr/zephyr.rpd -p
 
 Flashing
 ========
@@ -133,11 +121,17 @@ To flash the program to board
 
 2. Make sure J-Link OB jumper is in default configuration as describe in `EK-RA6M5 - User's Manual`_
 
-3. Execute west command
+3. Execute west command to flash using jlink runner
 
 	.. code-block:: console
 
 		west flash -r jlink
+
+4. Or flash using rfp runner, this will partition memory then flash zephyr image.
+
+   .. code-block:: console
+
+      west flash -r rfp
 
 Debugging
 =========
@@ -160,6 +154,7 @@ References
 **********
 - `EK-RA6M5 Website`_
 - `RA6M5 MCU group Website`_
+- `RA6 Ethernet Controller configuration`_
 
 .. _EK-RA6M5 Website:
    https://www.renesas.com/us/en/products/microcontrollers-microprocessors/ra-cortex-m-mcus/ek-ra6m5-evaluation-kit-ra6m5-mcu-group
@@ -175,3 +170,9 @@ References
 
 .. _Segger Ozone Download:
    https://www.segger.com/downloads/jlink#Ozone
+
+.. _Renesas Flash Programmer Download:
+   https://www.renesas.com/en/software-tool/renesas-flash-programmer-programming-gui
+
+.. _RA6 Ethernet Controller configuration:
+   https://www.renesas.com/en/blogs/configuration-issues-ra6-ethernet-controller#document
