@@ -10,4 +10,7 @@ toolchain:
 supported:
   - gpio
   - usbd
+  - watchdog
+  - counter
+  - pwm
 vendor: renesas

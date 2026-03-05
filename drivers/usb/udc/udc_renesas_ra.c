@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 Renesas Electronics Corporation
+ * Copyright (c) 2024-2025 Renesas Electronics Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -30,6 +30,7 @@ struct udc_renesas_ra_data {
 	struct k_thread thread_data;
 	struct st_usbd_instance_ctrl udc;
 	struct st_usbd_cfg udc_cfg;
+	atomic_t set_addr_req;
 };
 
 enum udc_renesas_ra_event_type {
@@ -79,7 +80,7 @@ static void udc_renesas_ra_event_handler(usbd_callback_arg_t *p_args)
 		break;
 
 	case USBD_EVENT_SOF:
-		udc_submit_event(dev, UDC_EVT_SOF, 0);
+		udc_submit_sof_event(dev);
 		break;
 
 	default:
@@ -99,13 +100,14 @@ static void udc_renesas_ra_interrupt_handler(void *arg)
 static void udc_event_xfer_next(const struct device *dev, const uint8_t ep)
 {
 	struct udc_renesas_ra_data *data = udc_get_private(dev);
+	struct udc_ep_config *ep_cfg = udc_get_ep_cfg(dev, ep);
 	struct net_buf *buf;
 
-	if (udc_ep_is_busy(dev, ep)) {
+	if (udc_ep_is_busy(ep_cfg)) {
 		return;
 	}
 
-	buf = udc_buf_peek(dev, ep);
+	buf = udc_buf_peek(ep_cfg);
 	if (buf != NULL) {
 		int err;
 
@@ -119,7 +121,7 @@ static void udc_event_xfer_next(const struct device *dev, const uint8_t ep)
 			LOG_ERR("ep 0x%02x error", ep);
 			udc_submit_ep_event(dev, buf, -ECONNREFUSED);
 		} else {
-			udc_ep_set_busy(dev, ep, true);
+			udc_ep_set_busy(ep_cfg, true);
 		}
 	}
 }
@@ -146,11 +148,16 @@ static int usbd_ctrl_feed_dout(const struct device *dev, const size_t length)
 
 static int udc_event_xfer_setup(const struct device *dev, struct udc_renesas_ra_evt *evt)
 {
+	struct udc_renesas_ra_data *data = udc_get_private(dev);
 	struct net_buf *buf;
 	int err;
 
 	struct usb_setup_packet *setup_packet =
 		(struct usb_setup_packet *)&evt->hal_evt.setup_received;
+
+	if (setup_packet->bRequest == USB_SREQ_SET_ADDRESS) {
+		atomic_set(&data->set_addr_req, 1);
+	}
 
 	buf = udc_ctrl_alloc(dev, USB_CONTROL_EP_OUT, sizeof(struct usb_setup_packet));
 	if (buf == NULL) {
@@ -182,34 +189,40 @@ static int udc_event_xfer_setup(const struct device *dev, struct udc_renesas_ra_
 
 static void udc_event_xfer_ctrl_in(const struct device *dev, struct net_buf *const buf)
 {
-	if (udc_ctrl_stage_is_status_in(dev) || udc_ctrl_stage_is_no_data(dev)) {
-		/* Status stage finished, notify upper layer */
-		udc_ctrl_submit_status(dev, buf);
+	struct udc_renesas_ra_data *data = udc_get_private(dev);
+	atomic_val_t is_set_addr = atomic_clear(&data->set_addr_req);
+	fsp_err_t err;
+
+	if (udc_ctrl_stage_is_no_data(dev)) {
+		if (is_set_addr == 0) {
+			/* Complete s-[status] stage for non-SET_ADDRESS requests */
+			err = R_USBD_XferStart(&data->udc, USB_CONTROL_EP_IN, NULL, 0);
+			if (err != FSP_SUCCESS) {
+				return;
+			}
+		}
 	}
+
+	/*
+	 * Control status completed.
+	 * Controller supports auto-status, so we cannot check for status completion after state
+	 * update
+	 */
+	net_buf_unref(buf);
 
 	/* Update to next stage of control transfer */
 	udc_ctrl_update_stage(dev, buf);
-
-	if (udc_ctrl_stage_is_status_out(dev)) {
-		/* IN transfer finished, perform status stage OUT and release buffer */
-		usbd_ctrl_feed_dout(dev, 0);
-		net_buf_unref(buf);
-	}
 }
 
 static void udc_event_status_in(const struct device *dev)
 {
-	struct udc_renesas_ra_data *data = udc_get_private(dev);
 	struct net_buf *buf;
 
-	buf = udc_buf_get(dev, USB_CONTROL_EP_IN);
+	buf = udc_buf_get(udc_get_ep_cfg(dev, USB_CONTROL_EP_IN));
 	if (unlikely(buf == NULL)) {
 		LOG_DBG("ep 0x%02x queue is empty", USB_CONTROL_EP_IN);
 		return;
 	}
-
-	/* Perform status stage IN */
-	R_USBD_XferStart(&data->udc, USB_CONTROL_EP_IN, NULL, 0);
 
 	udc_event_xfer_ctrl_in(dev, buf);
 }
@@ -218,11 +231,6 @@ static void udc_event_xfer_ctrl_out(const struct device *dev, struct net_buf *co
 				    uint32_t len)
 {
 	net_buf_add(buf, len);
-
-	if (udc_ctrl_stage_is_status_out(dev)) {
-		/* Status stage finished, notify upper layer */
-		udc_ctrl_submit_status(dev, buf);
-	}
 
 	/* Update to next stage of control transfer */
 	udc_ctrl_update_stage(dev, buf);
@@ -236,14 +244,16 @@ static void udc_event_xfer_complete(const struct device *dev, struct udc_renesas
 {
 	struct net_buf *buf;
 	struct udc_renesas_ra_data *data = udc_get_private(dev);
+	struct udc_ep_config *ep_cfg;
 
 	uint8_t ep = evt->hal_evt.xfer_complete.ep_addr;
 	usbd_xfer_result_t result = evt->hal_evt.xfer_complete.result;
 	uint32_t len = evt->hal_evt.xfer_complete.len;
 
-	udc_ep_set_busy(dev, ep, false);
+	ep_cfg = udc_get_ep_cfg(dev, ep);
+	udc_ep_set_busy(ep_cfg, false);
 
-	buf = udc_buf_peek(dev, ep);
+	buf = udc_buf_peek(ep_cfg);
 	if (buf == NULL) {
 		return;
 	}
@@ -262,7 +272,7 @@ static void udc_event_xfer_complete(const struct device *dev, struct udc_renesas
 		return;
 	}
 
-	buf = udc_buf_get(dev, ep);
+	buf = udc_buf_get(ep_cfg);
 
 	if (ep == USB_CONTROL_EP_IN) {
 		udc_event_xfer_ctrl_in(dev, buf);
@@ -353,7 +363,7 @@ static int udc_renesas_ra_ep_dequeue(const struct device *dev, struct udc_ep_con
 
 	lock_key = irq_lock();
 
-	buf = udc_buf_get_all(dev, cfg->addr);
+	buf = udc_buf_get_all(cfg);
 	if (buf != NULL) {
 		udc_submit_ep_event(dev, buf, -ECONNABORTED);
 	}
@@ -362,7 +372,7 @@ static int udc_renesas_ra_ep_dequeue(const struct device *dev, struct udc_ep_con
 		return -EIO;
 	}
 
-	udc_ep_set_busy(dev, cfg->addr, false);
+	udc_ep_set_busy(cfg, false);
 
 	irq_unlock(lock_key);
 
@@ -640,6 +650,7 @@ static int udc_renesas_ra_driver_preinit(const struct device *dev)
 
 	data->caps.rwup = true;
 	data->caps.mps0 = UDC_MPS0_64;
+	data->caps.out_ack = true;
 	if (priv->udc_cfg.usb_speed == USBD_SPEED_HS) {
 		data->caps.hs = true;
 		mps = 1024;
@@ -687,16 +698,16 @@ static int udc_renesas_ra_driver_preinit(const struct device *dev)
 
 #if DT_HAS_COMPAT_STATUS_OKAY(renesas_ra_usbhs)
 	if (priv->udc_cfg.hs_irq != (IRQn_Type)BSP_IRQ_DISABLED) {
-		R_ICU->IELSR[priv->udc_cfg.hs_irq] = ELC_EVENT_USBHS_USB_INT_RESUME;
+		R_ICU->IELSR[priv->udc_cfg.hs_irq] = BSP_PRV_IELS_ENUM(EVENT_USBHS_USB_INT_RESUME);
 	}
 #endif
 
 	if (priv->udc_cfg.irq != (IRQn_Type)BSP_IRQ_DISABLED) {
-		R_ICU->IELSR[priv->udc_cfg.irq] = ELC_EVENT_USBFS_INT;
+		R_ICU->IELSR[priv->udc_cfg.irq] = BSP_PRV_IELS_ENUM(EVENT_USBFS_INT);
 	}
 
 	if (priv->udc_cfg.irq_r != (IRQn_Type)BSP_IRQ_DISABLED) {
-		R_ICU->IELSR[priv->udc_cfg.irq_r] = ELC_EVENT_USBFS_RESUME;
+		R_ICU->IELSR[priv->udc_cfg.irq_r] = BSP_PRV_IELS_ENUM(EVENT_USBFS_RESUME);
 	}
 
 	config->make_thread(dev);
@@ -745,9 +756,11 @@ static const struct udc_api udc_renesas_ra_api = {
 	(DT_NODE_HAS_COMPAT(id, renesas_ra_usbhs) ? UDC_BUS_SPEED_HS : UDC_BUS_SPEED_FS)
 
 #define USB_RENESAS_RA_SPEED_IDX(id)                                                               \
-	(DT_NODE_HAS_COMPAT(id, renesas_ra_usbhs)                                                  \
-		 ? DT_ENUM_IDX_OR(id, maximum_speed, UDC_BUS_SPEED_HS)                             \
-		 : DT_ENUM_IDX_OR(id, maximum_speed, UDC_BUS_SPEED_FS))
+	COND_CODE_1(CONFIG_UDC_DRIVER_HIGH_SPEED_SUPPORT_ENABLED,                                  \
+		    (DT_NODE_HAS_COMPAT(id, renesas_ra_usbhs)                                      \
+			? DT_ENUM_IDX_OR(id, maximum_speed, UDC_BUS_SPEED_HS)                      \
+			: DT_ENUM_IDX_OR(id, maximum_speed, UDC_BUS_SPEED_FS)),                    \
+		    (UDC_BUS_SPEED_FS))
 
 #define USB_RENESAS_RA_IRQ_CONNECT(idx, n)                                                         \
 	IRQ_CONNECT(DT_IRQ_BY_IDX(DT_INST_PARENT(n), idx, irq),                                    \
@@ -808,7 +821,7 @@ static const struct udc_api udc_renesas_ra_api = {
 			.ipl = USB_RENESAS_RA_IRQ_GET(DT_INST_PARENT(n), usbfs_i, priority),       \
 			.ipl_r = USB_RENESAS_RA_IRQ_GET(DT_INST_PARENT(n), usbfs_r, priority),     \
 			.hsipl = USB_RENESAS_RA_IRQ_GET(DT_INST_PARENT(n), usbhs_ir, priority),    \
-			.p_context = DEVICE_DT_INST_GET(n),                                        \
+			.p_context = (void *)DEVICE_DT_INST_GET(n),                                \
 			.p_callback = udc_renesas_ra_event_handler,                                \
 		},                                                                                 \
 	};                                                                                         \

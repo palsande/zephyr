@@ -30,7 +30,7 @@ Hardware
      - Low 1.1V VCORE Supply Voltage
      - 3.6V GPIO Operating Range
      - Internal LDO Provides Operation from Single Supply
-     - Wide Operating Temperature: -40°C to +105°C
+     - Wide Operating Temperature: -40 °C to +105 °C
 
   - Power Management Maximizes Uptime for Battery Applications
 
@@ -71,24 +71,12 @@ Hardware
 Supported Features
 ==================
 
-The ``max32660evsys`` board supports the following interfaces:
-
-+-----------+------------+-------------------------------------+
-| Interface | Controller | Driver/Component                    |
-+===========+============+=====================================+
-| NVIC      | on-chip    | nested vector interrupt controller  |
-+-----------+------------+-------------------------------------+
-| SYSTICK   | on-chip    | systick                             |
-+-----------+------------+-------------------------------------+
-| CLOCK     | on-chip    | clock and reset control             |
-+-----------+------------+-------------------------------------+
-| GPIO      | on-chip    | gpio                                |
-+-----------+------------+-------------------------------------+
-| UART      | on-chip    | serial                              |
-+-----------+------------+-------------------------------------+
+.. zephyr:board-supported-hw::
 
 Programming and Debugging
 *************************
+
+.. zephyr:board-supported-runners::
 
 Flashing
 ========
