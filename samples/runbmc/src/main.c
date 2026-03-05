@@ -1,23 +1,22 @@
 /*
- * RunBMC - Production BMC Firmware on Zephyr RTOS
  * Copyright (c) 2026 RunBMC Project
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/printk.h>
-#include <zephyr/version.h>
 
-#include <runbmc/core/bmc.h>
-#include <runbmc/core/platform.h>
+#include "runbmc/core/bmc.h"
+#include "runbmc/core/platform.h"
 
 LOG_MODULE_REGISTER(runbmc_main, LOG_LEVEL_INF);
 
 int main(void)
 {
-    int ret;
+    /* Wait for console to be ready (especially needed for QEMU) */
+    k_msleep(50);
 
+    /* Print banner */
     printk("\n");
     printk("====================================================\n");
     printk("       RunBMC - BMC Firmware Framework on MCU\n");
@@ -25,62 +24,72 @@ int main(void)
     printk("====================================================\n");
     printk("RunBMC:     v%d.%d.%d\n", RUNBMC_VERSION_MAJOR, RUNBMC_VERSION_MINOR,
            RUNBMC_VERSION_PATCH);
-    printk("Zephyr:     v%d.%d.%d\n", KERNEL_VERSION_MAJOR, KERNEL_VERSION_MINOR,
-           KERNEL_PATCHLEVEL);
+    printk("Zephyr:     v4.2.99\n");
     printk("Platform:   %s\n", platform_get_name());
     printk("Build:      %s %s\n", __DATE__, __TIME__);
     printk("====================================================\n");
     printk("Enabled Features:\n");
+
 #ifdef CONFIG_RUNBMC_POWER_MANAGEMENT
     printk("  [x] Power Management\n");
 #else
     printk("  [ ] Power Management\n");
 #endif
+
 #ifdef CONFIG_RUNBMC_SENSOR_FRAMEWORK
     printk("  [x] Sensor Framework (%d GPUs)\n", CONFIG_RUNBMC_MAX_GPUS);
 #else
     printk("  [ ] Sensor Framework\n");
 #endif
+
 #ifdef CONFIG_RUNBMC_TELEMETRY
     printk("  [x] Telemetry Collection\n");
 #else
     printk("  [ ] Telemetry Collection\n");
 #endif
-#ifdef CONFIG_RUNBMC_THERMAL_MANAGEMENT
+
+#ifdef CONFIG_RUNBMC_THERMAL
     printk("  [x] Thermal Management\n");
 #else
     printk("  [ ] Thermal Management\n");
 #endif
+
 #ifdef CONFIG_RUNBMC_PLDM
     printk("  [x] PLDM Protocol\n");
 #else
     printk("  [ ] PLDM Protocol\n");
 #endif
+
 #ifdef CONFIG_RUNBMC_MCTP
     printk("  [x] MCTP Transport\n");
 #else
     printk("  [ ] MCTP Transport\n");
 #endif
+
 #ifdef CONFIG_RUNBMC_FRU
     printk("  [x] FRU Management\n");
 #else
     printk("  [ ] FRU Management\n");
 #endif
+
     printk("====================================================\n\n");
+
+    /* Small delay to let banner complete before threads start logging */
+    k_msleep(10);
 
     /* Initialize platform */
     LOG_INF("Initializing platform...");
-    ret = platform_init();
-    if (ret < 0) {
-        LOG_ERR("Platform initialization failed: %d", ret);
+    int ret = platform_init();
+    if (ret != 0) {
+        LOG_ERR("Platform init failed: %d", ret);
         return ret;
     }
 
-    /* Initialize BMC core */
+    /* Initialize BMC core (this starts all threads) */
     LOG_INF("Initializing BMC core...");
     ret = bmc_core_init();
-    if (ret < 0) {
-        LOG_ERR("BMC core initialization failed: %d", ret);
+    if (ret != 0) {
+        LOG_ERR("BMC core init failed: %d", ret);
         return ret;
     }
 

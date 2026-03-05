@@ -85,11 +85,26 @@ else()
   message(STATUS "  [ ] PLDM Protocol")
 endif()
 
+# MCTP Transport Layer
 if(CONFIG_RUNBMC_MCTP)
-  message(STATUS "  [x] MCTP Transport (placeholder)")
-  # Future: target_sources(app PRIVATE src/protocols/mctp/mctp_core.c)
+    target_sources(app PRIVATE src/protocols/mctp_core.c)
+    message(STATUS "  [x] MCTP Protocol")
+
+    if(CONFIG_RUNBMC_MCTP_I2C)
+        target_sources(app PRIVATE src/protocols/mctp_i2c.c)
+        message(STATUS "      - I2C Binding")
+    endif()
+
+    if(CONFIG_RUNBMC_MCTP_UART)
+        target_sources(app PRIVATE src/protocols/mctp_uart.c)
+        message(STATUS "      - UART Binding")
+    endif()
+
+    if(CONFIG_SHELL)
+        target_sources(app PRIVATE src/shell/shell_mctp.c)
+    endif()
 else()
-  message(STATUS "  [ ] MCTP Transport")
+    message(STATUS "  [ ] MCTP Protocol")
 endif()
 
 if(CONFIG_RUNBMC_FRU)

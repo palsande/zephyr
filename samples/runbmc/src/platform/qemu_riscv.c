@@ -1,39 +1,51 @@
-/* SPDX-License-Identifier: Apache-2.0 */
-/* Copyright (c) 2026 RunBMC Project */
+/*
+ * QEMU RISC-V Platform HAL
+ * Simulated sensor readings for development/testing
+ */
 
 #include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
+#include <zephyr/device.h>
 #include <runbmc/core/platform.h>
+#include <runbmc/core/types.h>
 
-LOG_MODULE_REGISTER(platform_qemu, LOG_LEVEL_INF);
+const char *platform_get_name(void)
+{
+    return "QEMU RISC-V32";
+}
 
 int platform_init(void)
 {
-    LOG_INF("Initializing QEMU RISC-V platform");
-    /* Platform-specific initialization */
+    printk("QEMU RISC-V Platform HAL initialized\n");
     return 0;
-}
-
-int32_t platform_read_sensor(uint8_t sensor_id)
-{
-    /* Simulated sensor readings for QEMU */
-    return 45000 + (k_uptime_get_32() % 10000); /* 45-55°C */
 }
 
 int platform_set_power(uint8_t state)
 {
-    LOG_INF("Platform power control: %s", state ? "ON" : "OFF");
-    /* Simulated power control */
+    /* QEMU has no real power control - just log the request */
+    printk("Power state change requested: %s\n", state ? "ON" : "OFF");
     return 0;
 }
 
-const char *platform_get_name(void)
+void platform_indicate_power_good(void)
 {
-#if defined(CONFIG_BOARD_QEMU_RISCV32)
-    return "QEMU RISC-V32";
-#elif defined(CONFIG_BOARD_QEMU_RISCV64)
-    return "QEMU RISC-V64";
-#else
-    return "Unknown QEMU Platform";
-#endif
+    /* QEMU has no physical LEDs - no action needed */
+    /* In a real implementation, this could control a GPIO or log to console */
+}
+
+void platform_indicate_warning(void)
+{
+    /* QEMU has no physical LEDs - no action needed */
+    /* In a real implementation, this could flash LEDs or trigger alerts */
+}
+
+void platform_indicate_activity(void)
+{
+    /* QEMU has no physical LEDs - no action needed */
+    /* In a real implementation, this could pulse an activity LED */
+}
+
+int32_t platform_read_sensor(uint8_t sensor_id)
+{
+    /* Simulated temperature reading for QEMU */
+    return 45 + (sensor_id * 5);
 }

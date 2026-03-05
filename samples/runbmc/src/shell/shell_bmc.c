@@ -1,186 +1,116 @@
-/* SPDX-License-Identifier: Apache-2.0 */
-/* Copyright (c) 2026 RunBMC Project */
+/*
+ * Copyright (c) 2026 RunBMC Project
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <zephyr/kernel.h>
 #include <zephyr/shell/shell.h>
-#include <zephyr/version.h>
-#include <runbmc/core/bmc.h>
-#include <runbmc/core/platform.h>
+#include "runbmc/core/bmc.h"
+#include "runbmc/core/platform.h"
 
-/* bmc info */
+/* bmc info - Show BMC information */
 static int cmd_bmc_info(const struct shell *sh, size_t argc, char **argv)
 {
-    ARG_UNUSED(argc);
-    ARG_UNUSED(argv);
-
-    shell_print(sh, "===================================");
-    shell_print(sh, "RunBMC System Information");
-    shell_print(sh, "===================================");
-    shell_print(sh, "RunBMC:       v%d.%d.%d", RUNBMC_VERSION_MAJOR, RUNBMC_VERSION_MINOR,
+    shell_print(sh, "RunBMC Firmware Information:");
+    shell_print(sh, "  Version:  v%d.%d.%d", RUNBMC_VERSION_MAJOR, RUNBMC_VERSION_MINOR,
             RUNBMC_VERSION_PATCH);
-    shell_print(sh, "Zephyr:       v%d.%d.%d", KERNEL_VERSION_MAJOR, KERNEL_VERSION_MINOR,
-            KERNEL_PATCHLEVEL);
-    shell_print(sh, "Platform:     %s", platform_get_name());
-    shell_print(sh, "Build:        %s %s", __DATE__, __TIME__);
-    shell_print(sh, "Max GPUs:     %d", CONFIG_RUNBMC_MAX_GPUS);
+    shell_print(sh, "  Platform: %s", platform_get_name());
+    shell_print(sh, "  Zephyr:   v4.2.99");
+    shell_print(sh, "  Build:    %s %s", __DATE__, __TIME__);
 
     return 0;
 }
 
-/* bmc status */
+/* bmc status - Show BMC status */
 static int cmd_bmc_status(const struct shell *sh, size_t argc, char **argv)
 {
-    ARG_UNUSED(argc);
-    ARG_UNUSED(argv);
+    const struct bmc_state *state = bmc_get_status();
 
-    struct bmc_telemetry_sample sample;
-    int ret = bmc_get_status(&sample);
-
-    if (ret < 0) {
-        shell_error(sh, "Failed to get status: %d", ret);
-        return ret;
-    }
-
-    shell_print(sh, "===================================");
-    shell_print(sh, "BMC System Status");
-    shell_print(sh, "===================================");
-    shell_print(sh, "Uptime:           %u seconds (%u min)", sample.uptime_sec,
-            sample.uptime_sec / 60);
-    shell_print(sh, "Power State:      %s",
-            sample.power_state == BMC_POWER_STATE_S5           ? "OFF"
-            : sample.power_state == BMC_POWER_STATE_S0         ? "ON"
-            : sample.power_state == BMC_POWER_STATE_TRANSITION ? "TRANSITIONING"
-                                       : "UNKNOWN");
-    shell_print(sh, "Power Draw:       %u W", sample.power_watts);
-    shell_print(sh, "Sensor Reads:     %u", sample.sensor_reads);
-    shell_print(sh, "Telemetry Samples: %u", sample.sample_count);
+    shell_print(sh, "BMC Status:");
+    shell_print(sh, "  Power Good:   %s", state->power_good ? "Yes" : "No");
+    shell_print(sh, "  Warning:      %s", state->warning_active ? "Active" : "None");
+    shell_print(sh, "  Uptime:       %u seconds", state->uptime);
+    shell_print(sh, "  Total Power:  %u W", state->latest_sample.total_power);
 
     return 0;
 }
 
-/* bmc sensors */
-static int cmd_bmc_sensors(const struct shell *sh, size_t argc, char **argv)
-{
-    ARG_UNUSED(argc);
-    ARG_UNUSED(argv);
-
-    struct bmc_telemetry_sample sample;
-    int ret = bmc_get_status(&sample);
-
-    if (ret < 0) {
-        shell_error(sh, "Failed to get sensors: %d", ret);
-        return ret;
-    }
-
-    shell_print(sh, "===================================");
-    shell_print(sh, "Sensor Readings");
-    shell_print(sh, "===================================");
-    shell_print(sh, "CPU Temperature:  %d°C", sample.cpu_temp);
-    shell_print(sh, "GPU Temperatures:");
-    for (int i = 0; i < CONFIG_RUNBMC_MAX_GPUS; i++) {
-        shell_print(sh, "  GPU%d:           %d°C", i, sample.gpu_temp[i]);
-    }
-
-    return 0;
-}
-
-/* bmc telemetry */
-static int cmd_bmc_telemetry(const struct shell *sh, size_t argc, char **argv)
-{
-    ARG_UNUSED(argc);
-    ARG_UNUSED(argv);
-
-    struct bmc_telemetry_sample sample;
-    int ret = bmc_get_status(&sample);
-
-    if (ret < 0) {
-        shell_error(sh, "Failed to get telemetry: %d", ret);
-        return ret;
-    }
-
-    shell_print(sh, "===================================");
-    shell_print(sh, "Telemetry Snapshot #%u", sample.sample_count);
-    shell_print(sh, "===================================");
-    shell_print(sh, "Uptime:           %u seconds (%u min)", sample.uptime_sec,
-            sample.uptime_sec / 60);
-    shell_print(sh, "Power State:      %s",
-            sample.power_state == BMC_POWER_STATE_S5           ? "OFF"
-            : sample.power_state == BMC_POWER_STATE_S0         ? "ON"
-            : sample.power_state == BMC_POWER_STATE_TRANSITION ? "TRANSITIONING"
-                                       : "UNKNOWN");
-    shell_print(sh, "");
-    shell_print(sh, "Temperatures:");
-    shell_print(sh, "  CPU:            %d°C", sample.cpu_temp);
-    for (int i = 0; i < CONFIG_RUNBMC_MAX_GPUS; i++) {
-        shell_print(sh, "  GPU%d:           %d°C", i, sample.gpu_temp[i]);
-    }
-    shell_print(sh, "");
-    shell_print(sh, "Power:");
-    shell_print(sh, "  Current Draw:   %u W", sample.power_watts);
-    shell_print(sh, "  Budget:         800 W");
-    shell_print(sh, "  Headroom:       %d W", 800 - sample.power_watts);
-    shell_print(sh, "");
-    shell_print(sh, "Statistics:");
-    shell_print(sh, "  Sensor Reads:   %u", sample.sensor_reads);
-    shell_print(sh, "  Samples:        %u", sample.sample_count);
-
-    return 0;
-}
-
-/* bmc features */
+/* bmc features - Show enabled features */
 static int cmd_bmc_features(const struct shell *sh, size_t argc, char **argv)
 {
-    ARG_UNUSED(argc);
-    ARG_UNUSED(argv);
+    shell_print(sh, "Enabled Features:");
 
-    shell_print(sh, "===================================");
-    shell_print(sh, "Compiled Features");
-    shell_print(sh, "===================================");
 #ifdef CONFIG_RUNBMC_POWER_MANAGEMENT
-    shell_print(sh, "[x] Power Management");
+    shell_print(sh, "  [x] Power Management");
 #else
-    shell_print(sh, "[ ] Power Management");
+    shell_print(sh, "  [ ] Power Management");
 #endif
+
 #ifdef CONFIG_RUNBMC_SENSOR_FRAMEWORK
-    shell_print(sh, "[x] Sensor Framework");
+    shell_print(sh, "  [x] Sensor Framework");
 #else
-    shell_print(sh, "[ ] Sensor Framework");
+    shell_print(sh, "  [ ] Sensor Framework");
 #endif
+
 #ifdef CONFIG_RUNBMC_TELEMETRY
-    shell_print(sh, "[x] Telemetry Collection");
+    shell_print(sh, "  [x] Telemetry Collection");
 #else
-    shell_print(sh, "[ ] Telemetry Collection");
+    shell_print(sh, "  [ ] Telemetry Collection");
 #endif
-#ifdef CONFIG_RUNBMC_THERMAL_MANAGEMENT
-    shell_print(sh, "[x] Thermal Management");
-#else
-    shell_print(sh, "[ ] Thermal Management");
-#endif
-#ifdef CONFIG_RUNBMC_PLDM
-    shell_print(sh, "[x] PLDM Protocol");
-#else
-    shell_print(sh, "[ ] PLDM Protocol");
-#endif
+
 #ifdef CONFIG_RUNBMC_MCTP
-    shell_print(sh, "[x] MCTP Transport");
+    shell_print(sh, "  [x] MCTP Transport");
 #else
-    shell_print(sh, "[ ] MCTP Transport");
+    shell_print(sh, "  [ ] MCTP Transport");
 #endif
-#ifdef CONFIG_RUNBMC_FRU
-    shell_print(sh, "[x] FRU Management");
+
+#ifdef CONFIG_RUNBMC_PLDM
+    shell_print(sh, "  [x] PLDM Protocol");
 #else
-    shell_print(sh, "[ ] FRU Management");
+    shell_print(sh, "  [ ] PLDM Protocol");
 #endif
 
     return 0;
 }
 
-SHELL_STATIC_SUBCMD_SET_CREATE(
-    sub_bmc, SHELL_CMD(info, NULL, "Display BMC information", cmd_bmc_info),
-    SHELL_CMD(status, NULL, "Display system status", cmd_bmc_status),
-    SHELL_CMD(sensors, NULL, "Display sensor readings", cmd_bmc_sensors),
-    SHELL_CMD(telemetry, NULL, "Display telemetry snapshot", cmd_bmc_telemetry),
-    SHELL_CMD(features, NULL, "Display compiled features", cmd_bmc_features),
-    SHELL_SUBCMD_SET_END);
+/* bmc sensors - Show sensor data */
+static int cmd_bmc_sensors(const struct shell *sh, size_t argc, char **argv)
+{
+    const struct bmc_state *state = bmc_get_status();
 
-SHELL_CMD_REGISTER(bmc, &sub_bmc, "RunBMC commands", NULL);
+    shell_print(sh, "GPU Sensors (%u GPUs):", CONFIG_RUNBMC_MAX_GPUS);
+    shell_print(sh, "  GPU  | Temp(C) | Power(W) | Util(%%)");
+    shell_print(sh, "  -----|---------|----------|--------");
+
+    for (int i = 0; i < CONFIG_RUNBMC_MAX_GPUS; i++) {
+        shell_print(sh, "  %3d  |  %5d  |   %5u  |  %3u", i,
+                state->latest_sample.gpus[i].temperature,
+                state->latest_sample.gpus[i].power,
+                state->latest_sample.gpus[i].utilization);
+    }
+
+    return 0;
+}
+
+/* bmc telemetry - Show telemetry data */
+static int cmd_bmc_telemetry(const struct shell *sh, size_t argc, char **argv)
+{
+    const struct bmc_state *state = bmc_get_status();
+
+    shell_print(sh, "Telemetry Data:");
+    shell_print(sh, "  Timestamp:    %llu ms", state->latest_sample.timestamp);
+    shell_print(sh, "  Total Power:  %u W", state->latest_sample.total_power);
+
+    return 0;
+}
+
+/* Register BMC shell commands */
+SHELL_STATIC_SUBCMD_SET_CREATE(bmc_cmds,
+                   SHELL_CMD(info, NULL, "Show BMC information", cmd_bmc_info),
+                   SHELL_CMD(status, NULL, "Show BMC status", cmd_bmc_status),
+                   SHELL_CMD(features, NULL, "Show enabled features", cmd_bmc_features),
+                   SHELL_CMD(sensors, NULL, "Show sensor data", cmd_bmc_sensors),
+                   SHELL_CMD(telemetry, NULL, "Show telemetry data", cmd_bmc_telemetry),
+                   SHELL_SUBCMD_SET_END);
+
+SHELL_CMD_REGISTER(bmc, &bmc_cmds, "BMC commands", NULL);

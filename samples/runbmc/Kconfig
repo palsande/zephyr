@@ -64,13 +64,43 @@ config RUNBMC_PLDM
       Enable Platform Level Data Model (PLDM) per DMTF DSP0248.
       Required for modern BMC interfaces.
 
+#
+# MCTP Transport Protocol
+#
 config RUNBMC_MCTP
     bool "MCTP Transport Layer"
     default n
-    depends on RUNBMC_PLDM
     help
-      Enable Management Component Transport Protocol (MCTP)
-      per DMTF DSP0236. Transport for PLDM messages.
+      Enable MCTP (Management Component Transport Protocol) support.
+      Implements DMTF DSP0236 specification.
+
+if RUNBMC_MCTP
+
+config RUNBMC_MCTP_I2C
+    bool "MCTP over I2C binding"
+    default n
+    select I2C
+    help
+      Enable MCTP over I2C transport binding (DSP0237).
+      Typically used on STM32F4 and other microcontrollers.
+
+config RUNBMC_MCTP_UART
+    bool "MCTP over UART binding"
+    default n
+    select UART_INTERRUPT_DRIVEN
+    help
+      Enable MCTP over UART transport binding (DSP0253).
+      Typically used on QEMU and systems with serial ports.
+
+config RUNBMC_MCTP_EID
+    hex "MCTP Local Endpoint ID"
+    default 0x08
+    range 0x08 0xFE
+    help
+      Local MCTP Endpoint ID (EID) for this BMC.
+      Valid range: 0x08 to 0xFE (0x00=NULL, 0xFF=Broadcast).
+
+endif # RUNBMC_MCTP
 
 config RUNBMC_FRU
     bool "FRU Data Management"
